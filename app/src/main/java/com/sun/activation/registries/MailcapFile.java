@@ -21,18 +21,18 @@ public class MailcapFile {
      * is indexed by the command name and references a List of
      * class names (strings) for each command.
      */
-    private Map type_hash = new HashMap();
+    private Map<String, Map<String, List<String>>> type_hash = new HashMap<>();
 
     /**
      * Another Map like above, but for fallback entries.
      */
-    private Map fallback_hash = new HashMap();
+    private Map<String, Map<String, List<String>>> fallback_hash = new HashMap<>();
 
     /**
      * A Map indexed by MIME type (string) that references
      * a List of native commands (string) corresponding to the type.
      */
-    private Map native_commands = new HashMap();
+    private Map<String, List<String>> native_commands = new HashMap<>();
 
     private static boolean addReverse = false;
 
@@ -92,19 +92,19 @@ public class MailcapFile {
      * if that fails looks for wildcard <i>type</i>/* and return that. Return the
      * list of all that hit.
      */
-    public Map getMailcapList(String mime_type) {
-	Map search_result = null;
-	Map wildcard_result = null;
+    public Map<String, List<String>> getMailcapList(String mime_type) {
+	Map<String, List<String>> search_result = null;
+	Map<String, List<String>> wildcard_result = null;
 
 	// first try the literal
-	search_result = (Map)type_hash.get(mime_type);
+	search_result = type_hash.get(mime_type);
 
 	// ok, now try the wildcard
 	int separator = mime_type.indexOf('/');
 	String subtype = mime_type.substring(separator + 1);
 	if (!subtype.equals("*")) {
 	    String type = mime_type.substring(0, separator + 1) + "*";
-	    wildcard_result = (Map)type_hash.get(type);
+	    wildcard_result = type_hash.get(type);
 
 	    if (wildcard_result != null) { // damn, we have to merge!!!
 		if (search_result != null)
@@ -125,19 +125,19 @@ public class MailcapFile {
      * if that fails looks for wildcard <i>type</i>/* and return that. Return the
      * list of all that hit.
      */
-    public Map getMailcapFallbackList(String mime_type) {
-	Map search_result = null;
-	Map wildcard_result = null;
+    public Map<String, List<String>> getMailcapFallbackList(String mime_type) {
+	Map<String, List<String>> search_result = null;
+	Map<String, List<String>> wildcard_result = null;
 
 	// first try the literal
-	search_result = (Map)fallback_hash.get(mime_type);
+	search_result = fallback_hash.get(mime_type);
 
 	// ok, now try the wildcard
 	int separator = mime_type.indexOf('/');
 	String subtype = mime_type.substring(separator + 1);
 	if (!subtype.equals("*")) {
 	    String type = mime_type.substring(0, separator + 1) + "*";
-	    wildcard_result = (Map)fallback_hash.get(type);
+	    wildcard_result = fallback_hash.get(type);
 
 	    if (wildcard_result != null) { // damn, we have to merge!!!
 		if (search_result != null)
@@ -154,12 +154,10 @@ public class MailcapFile {
      * Return all the MIME types known to this mailcap file.
      */
     public String[] getMimeTypes() {
-	Set types = new HashSet(type_hash.keySet());
+	Set<String> types = new HashSet<>(type_hash.keySet());
 	types.addAll(fallback_hash.keySet());
 	types.addAll(native_commands.keySet());
-	String[] mts = new String[types.size()];
-	mts = (String[])types.toArray(mts);
-	return mts;
+	return types.toArray(new String[0]);
     }
 
     /**
@@ -167,11 +165,9 @@ public class MailcapFile {
      */
     public String[] getNativeCommands(String mime_type) {
 	String[] cmds = null;
-	List v =
-	    (List)native_commands.get(mime_type.toLowerCase(Locale.ENGLISH));
+	List<String> v = native_commands.get(mime_type.toLowerCase(Locale.ENGLISH));
 	if (v != null) {
-	    cmds = new String[v.size()];
-	    cmds = (String[])v.toArray(cmds);
+	    cmds = v.toArray(new String[0]);
 	}
 	return cmds;
     }
@@ -182,20 +178,21 @@ public class MailcapFile {
      * returned, we don't want to touch the one passed in since
      * its integrity must be maintained.
      */
-    private Map mergeResults(Map first, Map second) {
-	Iterator verb_enum = second.keySet().iterator();
-	Map clonedHash = new HashMap(first);
+    private Map<String, List<String>> mergeResults(
+	    Map<String, List<String>> first, Map<String, List<String>> second) {
+	Iterator<String> verb_enum = second.keySet().iterator();
+	Map<String, List<String>> clonedHash = new HashMap<>(first);
 
 	// iterate through the verbs in the second map
 	while (verb_enum.hasNext()) {
-	    String verb = (String)verb_enum.next();
-	    List cmdVector = (List)clonedHash.get(verb);
+	    String verb = verb_enum.next();
+	    List<String> cmdVector = clonedHash.get(verb);
 	    if (cmdVector == null) {
 		clonedHash.put(verb, second.get(verb));
 	    } else {
 		// merge the two
-		List oldV = (List)second.get(verb);
-		cmdVector = new ArrayList(cmdVector);
+		List<String> oldV = second.get(verb);
+		cmdVector = new ArrayList<>(cmdVector);
 		cmdVector.addAll(oldV);
 		clonedHash.put(verb, cmdVector);
 	    }
@@ -322,7 +319,7 @@ public class MailcapFile {
 	    LogSupport.log("  Type: " + mimeType);
 
 	//	now setup the commands hashtable
-	Map commands = new LinkedHashMap();	// keep commands in order found
+	Map<String, List<String>> commands = new LinkedHashMap<>();	// keep commands in order found
 
 	//	parse the ';' that separates the type from the parameters
 	if (currentToken != MailcapTokenizer.SEMICOLON_TOKEN) {
@@ -345,9 +342,9 @@ public class MailcapFile {
 	if (currentToken == MailcapTokenizer.STRING_TOKEN) {
 	    // have a native comand, save the entire mailcap entry
 	    //String nativeCommand = tokenizer.getCurrentTokenValue();
-	    List v = (List)native_commands.get(mimeType);
+	    List<String> v = native_commands.get(mimeType);
 	    if (v == null) {
-		v = new ArrayList();
+		v = new ArrayList<>();
 		v.add(mailcapEntry);
 		native_commands.put(mimeType, v);
 	    } else {
@@ -417,9 +414,9 @@ public class MailcapFile {
 			    if (LogSupport.isLoggable())
 				LogSupport.log("    Command: " + commandName +
 						    ", Class: " + paramValue);
-			    List classes = (List)commands.get(commandName);
+			    List<String> classes = commands.get(commandName);
 			    if (classes == null) {
-				classes = new ArrayList();
+				classes = new ArrayList<>();
 				commands.put(commandName, classes);
 			    }
 			    if (addReverse)
@@ -434,9 +431,9 @@ public class MailcapFile {
 		}
 	    } while (currentToken == MailcapTokenizer.SEMICOLON_TOKEN);
 
-	    Map masterHash = isFallback ? fallback_hash : type_hash;
-	    Map curcommands =
-		(Map)masterHash.get(mimeType);
+	    Map<String, Map<String, List<String>>> masterHash =
+		    isFallback ? fallback_hash : type_hash;
+	    Map<String, List<String>> curcommands = masterHash.get(mimeType);
 	    if (curcommands == null) {
 		masterHash.put(mimeType, commands);
 	    } else {
@@ -444,17 +441,17 @@ public class MailcapFile {
 		    LogSupport.log("Merging commands for type " + mimeType);
 		// have to merge current and new commands
 		// first, merge list of classes for commands already known
-		Iterator cn = curcommands.keySet().iterator();
+		Iterator<String> cn = curcommands.keySet().iterator();
 		while (cn.hasNext()) {
-		    String cmdName = (String)cn.next();
-		    List ccv = (List)curcommands.get(cmdName);
-		    List cv = (List)commands.get(cmdName);
+		    String cmdName = cn.next();
+		    List<String> ccv = curcommands.get(cmdName);
+		    List<String> cv = commands.get(cmdName);
 		    if (cv == null)
 			continue;
 		    // add everything in cv to ccv, if it's not already there
-		    Iterator cvn = cv.iterator();
+		    Iterator<String> cvn = cv.iterator();
 		    while (cvn.hasNext()) {
-			String clazz = (String)cvn.next();
+			String clazz = cvn.next();
 			if (!ccv.contains(clazz))
 			    if (addReverse)
 				ccv.add(0, clazz);
@@ -465,10 +462,10 @@ public class MailcapFile {
 		// now, add commands not previously known
 		cn = commands.keySet().iterator();
 		while (cn.hasNext()) {
-		    String cmdName = (String)cn.next();
+		    String cmdName = cn.next();
 		    if (curcommands.containsKey(cmdName))
 			continue;
-		    List cv = (List)commands.get(cmdName);
+		    List<String> cv = commands.get(cmdName);
 		    curcommands.put(cmdName, cv);
 		}
 	    }

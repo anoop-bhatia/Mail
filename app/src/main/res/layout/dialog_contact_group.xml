@@ -36,7 +36,7 @@
             app:srcCompat="@drawable/twotone_info_24"
             app:tint="?attr/colorAccent" />
 
-        <eu.faircode.email.SpinnerEx
+        <in.anoopbhatia.mail.SpinnerEx
             android:id="@+id/spTarget"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -46,7 +46,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvGroup" />
 
-        <eu.faircode.email.SpinnerEx
+        <in.anoopbhatia.mail.SpinnerEx
             android:id="@+id/spGroup"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -55,7 +55,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/spTarget" />
 
-        <eu.faircode.email.SpinnerEx
+        <in.anoopbhatia.mail.SpinnerEx
             android:id="@+id/spType"
             android:layout_width="0dp"
             android:layout_height="wrap_content"

@@ -74,22 +74,22 @@ public final class ShortcutBadgerAlt {
     public static boolean applyCount(Context context, int badgeCount) {
         try {
             applyCountOrThrow(context, badgeCount);
-            eu.faircode.email.EntityLog.log(context, "Badger applied" +
+            in.anoopbhatia.mail.EntityLog.log(context, "Badger applied" +
                     " count=" + badgeCount +
                     " badger=" + sShortcutBadger.getClass().getSimpleName());
             return true;
         } catch (ShortcutBadgeException e) {
-            eu.faircode.email.EntityLog.log(context, "Badger not applied" +
+            in.anoopbhatia.mail.EntityLog.log(context, "Badger not applied" +
                     " count=" + badgeCount +
                     " badger=" + sShortcutBadger.getClass().getSimpleName() +
                     " reason=" + (e.getCause() == null ? e.getMessage() : e.getCause().getMessage()));
             if (!(sShortcutBadger instanceof DefaultBadger)) {
                 Throwable ex = new Throwable("Badger=" + sShortcutBadger.getClass(), e);
-                eu.faircode.email.EntityLog.log(context, ex + "\n" + Log.getStackTraceString(ex));
+                in.anoopbhatia.mail.EntityLog.log(context, ex + "\n" + Log.getStackTraceString(ex));
             }
             return false;
         } catch (Throwable ex) {
-            eu.faircode.email.Log.e(ex);
+            in.anoopbhatia.mail.Log.e(ex);
             return false;
         }
     }
@@ -219,7 +219,7 @@ public final class ShortcutBadgerAlt {
             for (Class<? extends Badger> badger : BADGERS) {
                 Badger shortcutBadger = null;
                 try {
-                    shortcutBadger = badger.newInstance();
+                    shortcutBadger = badger.getDeclaredConstructor().newInstance();
                 } catch (Exception ignored) {
                 }
                 if (shortcutBadger != null && shortcutBadger.getSupportLaunchers().contains(currentHomePackage)) {
@@ -232,7 +232,7 @@ public final class ShortcutBadgerAlt {
             }
         }
 
-        eu.faircode.email.EntityLog.log(context, "Badger selected=" +
+        in.anoopbhatia.mail.EntityLog.log(context, "Badger selected=" +
                 (sShortcutBadger == null ? null : sShortcutBadger.getClass()));
 
         if (sShortcutBadger == null) {
@@ -248,7 +248,7 @@ public final class ShortcutBadgerAlt {
                 sShortcutBadger = new DefaultBadger();
         }
 
-        eu.faircode.email.EntityLog.log(context, "Badger using=" + sShortcutBadger.getClass());
+        in.anoopbhatia.mail.EntityLog.log(context, "Badger using=" + sShortcutBadger.getClass());
 
         return true;
     }

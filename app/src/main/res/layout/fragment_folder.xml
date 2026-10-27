@@ -7,7 +7,7 @@
     android:layout_height="match_parent"
     android:padding="12dp"
     android:scrollbarStyle="outsideOverlay"
-    tools:context="eu.faircode.email.ActivityView">
+    tools:context="in.anoopbhatia.mail.ActivityView">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -47,7 +47,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvParent" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -69,7 +69,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/etName" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etDisplay"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -90,7 +90,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/etDisplay" />
 
-        <eu.faircode.email.ViewButtonColor
+        <in.anoopbhatia.mail.ViewButtonColor
             android:id="@+id/btnColor"
             style="?android:attr/buttonStyleSmall"
             android:layout_width="wrap_content"
@@ -186,7 +186,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cbSynchronize" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etPoll"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -311,7 +311,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:srcCompat="@drawable/twotone_info_24" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etSyncDays"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -347,7 +347,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvKeepDays" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etKeepDays"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -437,7 +437,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvInboxRootHint" />
 
-        <eu.faircode.email.ContentLoadingProgressBar
+        <in.anoopbhatia.mail.ContentLoadingProgressBar
             android:id="@+id/pbSave"
             style="@style/Base.Widget.AppCompat.ProgressBar"
             android:layout_width="24dp"
@@ -448,7 +448,7 @@
             app:layout_constraintStart_toEndOf="@id/btnSave"
             app:layout_constraintTop_toTopOf="@id/btnSave" />
 
-        <eu.faircode.email.ContentLoadingProgressBar
+        <in.anoopbhatia.mail.ContentLoadingProgressBar
             android:id="@+id/pbWait"
             style="@style/Base.Widget.AppCompat.ProgressBar"
             android:layout_width="wrap_content"

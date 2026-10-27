@@ -190,9 +190,8 @@ public class CommandInfo {
 
                 // Beans.instantiate specified to use SCL when loader is null
                 if (loader == null) {
-                    loader = (ClassLoader)
-		        AccessController.doPrivileged(new PrivilegedAction() {
-			    public Object run() {
+                    loader = AccessController.doPrivileged(new PrivilegedAction<ClassLoader>() {
+			    public ClassLoader run() {
 				ClassLoader cl = null;
 				try {
 				    cl = ClassLoader.getSystemClassLoader();
@@ -203,7 +202,7 @@ public class CommandInfo {
                 }
                 Class<?> beanClass = Class.forName(cn, true, loader);
                 try {
-                    return beanClass.newInstance();
+                    return beanClass.getDeclaredConstructor().newInstance();
                 } catch (Exception ex) {
                     throw new ClassNotFoundException(beanClass + ": " + ex, ex);
                 }

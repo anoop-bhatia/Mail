@@ -354,7 +354,7 @@ public class Protocol {
 		try {
 			socket.setSoTimeout(10 * 1000);
 		} catch (SocketException ex) {
-			eu.faircode.email.Log.e(ex);
+			in.anoopbhatia.mail.Log.e(ex);
 		}
 
 	commandStart(command);
@@ -638,7 +638,7 @@ public class Protocol {
 	    }
 	    socket = null;
 		if (traceInput != null && traceOutput != null)
-			eu.faircode.email.TrafficStatsHelper.report(host, prefix,
+			in.anoopbhatia.mail.TrafficStatsHelper.report(host, prefix,
 					traceOutput.getSent(), traceInput.getReceived());
 	}
     }

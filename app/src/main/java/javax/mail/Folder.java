@@ -176,7 +176,7 @@ public abstract class Folder implements AutoCloseable {
 	    // We need to encode each of the folder's names.
 	    char separator = getSeparator();
 	    StringTokenizer tok = new StringTokenizer(
-		fullname, new Character(separator).toString(), true);
+		fullname, Character.valueOf(separator).toString(), true);
 
 	    while (tok.hasMoreTokens()) {
 		String s = tok.nextToken();
@@ -1620,7 +1620,6 @@ public abstract class Folder implements AutoCloseable {
     /*
      * Add the event and vector of listeners to the queue to be delivered.
      */
-    @SuppressWarnings("unchecked")
     private void queueEvent(MailEvent event,
 	    Vector<? extends EventListener> vector) {
 	/*
@@ -1631,7 +1630,7 @@ public abstract class Folder implements AutoCloseable {
          * of this event will not take effect until after the event is
          * delivered.
          */
-	Vector<? extends EventListener> v = (Vector)vector.clone();
+	Vector<? extends EventListener> v = new Vector<>(vector);
 	q.enqueue(event, v);
     }
 

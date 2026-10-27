@@ -443,7 +443,7 @@ public class InternetHeaders {
 			// Of course, there are email servers which do not conform to this and insert a newline after the boundary ...
 			is.mark(0); // ByteArrayInputStream will save position
 			try {
-				String l = eu.faircode.email.Helper.readLine(is, java.nio.charset.StandardCharsets.ISO_8859_1);
+				String l = in.anoopbhatia.mail.Helper.readLine(is, java.nio.charset.StandardCharsets.ISO_8859_1);
 				while (l != null && l.length() > 0) {
 					if (android.text.TextUtils.isEmpty(l))
 						break;
@@ -453,7 +453,7 @@ public class InternetHeaders {
 						line = l;
 						break;
 					}
-					l = eu.faircode.email.Helper.readLine(is, java.nio.charset.StandardCharsets.ISO_8859_1);
+					l = in.anoopbhatia.mail.Helper.readLine(is, java.nio.charset.StandardCharsets.ISO_8859_1);
 				}
 				first = !android.text.TextUtils.isEmpty(line);
 			} finally {

@@ -862,7 +862,7 @@ public class SMTPTransport extends Transport {
 	    try {
 		    return a.authenticate(host, authzid, user, passwd);
 	    } catch (MessagingException ex) {
-		    eu.faircode.email.Log.w(ex);
+		    in.anoopbhatia.mail.Log.w(ex);
 		    mex = ex;
 	    }
 	}
@@ -1302,7 +1302,7 @@ public class SMTPTransport extends Transport {
 	    mailFrom();
 	    rcptTo();
 
-	    eu.faircode.email.ObjectHolder<Integer> total = new eu.faircode.email.ObjectHolder<>();
+	    in.anoopbhatia.mail.ObjectHolder<Integer> total = new in.anoopbhatia.mail.ObjectHolder<>();
 	    total.value = 0;
 	    this.message.writeTo(new OutputStream(){
 			@Override
@@ -1313,10 +1313,10 @@ public class SMTPTransport extends Transport {
 
 	    Integer _fd = null;
 	    try {
-			if (eu.faircode.email.BuildConfig.DEBUG && false)
+			if (in.anoopbhatia.mail.BuildConfig.DEBUG && false)
 				_fd = ParcelFileDescriptor.fromSocket(serverSocket).getFd();
 		} catch (Throwable ex) {
-			eu.faircode.email.Log.w(ex);
+			in.anoopbhatia.mail.Log.w(ex);
 		}
 	    final Integer fd = _fd;
 
@@ -1332,7 +1332,7 @@ public class SMTPTransport extends Transport {
 
 					int q = 0;
 					if (fd != null)
-						q = eu.faircode.email.ConnectionHelper.jni_socket_get_send_buffer(fd);
+						q = in.anoopbhatia.mail.ConnectionHelper.jni_socket_get_send_buffer(fd);
 					if (q > pos)
 						q = pos;
 
@@ -1342,7 +1342,7 @@ public class SMTPTransport extends Transport {
 
 					reporter.report(sent, total);
 				} catch (Throwable ex) {
-					eu.faircode.email.Log.e(ex);
+					in.anoopbhatia.mail.Log.e(ex);
 				}
 			}
 		});
@@ -1478,7 +1478,7 @@ public class SMTPTransport extends Transport {
 	    serverInput = null;
 	    lineInputStream = null;
 		if (traceInput != null && traceOutput != null)
-			eu.faircode.email.TrafficStatsHelper.report(host, name,
+			in.anoopbhatia.mail.TrafficStatsHelper.report(host, name,
 					traceOutput.getSent(), traceInput.getReceived());
 	    if (super.isConnected())	// only notify if already connected
 		super.close();

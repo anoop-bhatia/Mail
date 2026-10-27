@@ -311,8 +311,8 @@ public class SocketFetcher {
 		socket = SocketChannel.open().socket();
 	    } else {
 				SocketFactory f = (SocketFactory) props.get("fairemail.factory");
-				eu.faircode.email.Log.i("Using socket factory=" + f);
-				socket = (f == null ? eu.faircode.email.ConnectionHelper.getSocket(host, port) : f.createSocket());
+				in.anoopbhatia.mail.Log.i("Using socket factory=" + f);
+				socket = (f == null ? in.anoopbhatia.mail.ConnectionHelper.getSocket(host, port) : f.createSocket());
 	    }
 	}
 	if (to >= 0) {
@@ -327,7 +327,7 @@ public class SocketFetcher {
 	    String server = props.getProperty("fairemail.server");
 	    if (!TextUtils.isEmpty(server))
 				iaddr = InetAddress.getByAddress(server, iaddr.getAddress());
-	    eu.faircode.email.Log.i("Socket connect " + iaddr +
+	    in.anoopbhatia.mail.Log.i("Socket connect " + iaddr +
 				" timeout=" + cto +
 				" server=" + server +
 				" reuse=" + socket.getReuseAddress() +
@@ -340,8 +340,8 @@ public class SocketFetcher {
 		socket.connect(new InetSocketAddress(iaddr, port), cto);
 	    else
 		socket.connect(new InetSocketAddress(iaddr, port));
-		eu.faircode.email.TrafficStatsHelper.connect(host, port, prefix);
-	    eu.faircode.email.Log.i("Socket connected" +
+		in.anoopbhatia.mail.TrafficStatsHelper.connect(host, port, prefix);
+	    in.anoopbhatia.mail.Log.i("Socket connected" +
 				" local=" + socket.getLocalSocketAddress() +
 				" remote=" + socket.getRemoteSocketAddress());
 	    logger.finest("success!");

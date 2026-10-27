@@ -33,7 +33,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvNotes" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etNotes"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -47,7 +47,7 @@
             app:layout_constraintTop_toBottomOf="@id/tvRemark">
 
             <requestFocus />
-        </eu.faircode.email.EditTextPlain>
+        </in.anoopbhatia.mail.EditTextPlain>
 
         <TextView
             android:id="@+id/tvColor"
@@ -59,7 +59,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/etNotes" />
 
-        <eu.faircode.email.ViewButtonColor
+        <in.anoopbhatia.mail.ViewButtonColor
             android:id="@+id/btnColor"
             style="?android:attr/buttonStyleSmall"
             android:layout_width="wrap_content"

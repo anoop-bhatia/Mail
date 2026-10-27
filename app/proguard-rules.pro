@@ -21,8 +21,8 @@
 -renamesourcefileattribute SourceFile
 
 #App
--keep class eu.faircode.email.** {*;}
--keepnames class eu.faircode.email.** {*;}
+-keep class in.anoopbhatia.mail.** {*;}
+-keepnames class in.anoopbhatia.mail.** {*;}
 
 #AndroidX
 -keep class androidx.appcompat.widget.** {*;}
@@ -33,6 +33,10 @@
 -keep class androidx.work.impl.** {*;}
 #Stack traces, InvalidationTracker reflection
 -keepnames class androidx.** {*;}
+# DB's manual view-invalidation workaround accesses this Room 2.8 field.
+-keepclassmembers class androidx.room.InvalidationTracker {
+    java.util.Map viewTables;
+}
 
 -dontnote androidx.**
 -dontnote android.support.**
@@ -135,9 +139,6 @@
 -keepnames class org.commonmark.** {*;}
 -dontwarn org.commonmark.ext.gfm.strikethrough.Strikethrough
 
-#Amazon IAP
--dontwarn com.amazon.**
--keep class com.amazon.** {*;}
 -keepattributes *Annotation*
 
 #Misc
@@ -165,3 +166,18 @@
 #EvalEx
 -dontwarn lombok.Generated
 -keep class com.ezylang.evalex.** {*;}
+
+# Optional Log4j metadata and Commons Compress codecs
+-dontwarn aQute.bnd.annotation.baseline.BaselineIgnore
+-dontwarn aQute.bnd.annotation.spi.ServiceConsumer
+-dontwarn aQute.bnd.annotation.spi.ServiceProvider
+-dontwarn com.github.luben.zstd.ZstdInputStream
+-dontwarn edu.umd.cs.findbugs.annotations.Nullable
+-dontwarn org.osgi.framework.Bundle
+-dontwarn org.osgi.framework.BundleContext
+-dontwarn org.osgi.framework.FrameworkUtil
+-dontwarn org.osgi.framework.ServiceReference
+-dontwarn org.osgi.framework.wiring.BundleRevision
+-dontwarn org.tukaani.xz.MemoryLimitException
+-dontwarn org.tukaani.xz.SingleXZInputStream
+-dontwarn org.tukaani.xz.XZInputStream

@@ -82,7 +82,7 @@
         app:barrierDirection="bottom"
         app:constraint_referenced_ids="cbInline,ibSaveAttachments,ibDownloadAttachments" />
 
-    <eu.faircode.email.FixedRecyclerView
+    <in.anoopbhatia.mail.FixedRecyclerView
         android:id="@+id/rvAttachment"
         android:layout_width="0dp"
         android:layout_height="wrap_content"

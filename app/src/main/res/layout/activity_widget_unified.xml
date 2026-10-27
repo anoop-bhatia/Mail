@@ -7,7 +7,7 @@
     android:fadeScrollbars="false"
     android:padding="12dp"
     android:scrollbarStyle="outsideOverlay"
-    tools:context="eu.faircode.email.ActivityWidgetUnified">
+    tools:context="in.anoopbhatia.mail.ActivityWidgetUnified">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -22,7 +22,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <eu.faircode.email.SpinnerEx
+        <in.anoopbhatia.mail.SpinnerEx
             android:id="@+id/spAccount"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -40,7 +40,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/spAccount" />
 
-        <eu.faircode.email.SpinnerEx
+        <in.anoopbhatia.mail.SpinnerEx
             android:id="@+id/spFolder"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -108,7 +108,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cbDayNight" />
 
-        <eu.faircode.email.ViewButtonColor
+        <in.anoopbhatia.mail.ViewButtonColor
             android:id="@+id/btnHighlight"
             style="?android:attr/buttonStyleSmall"
             android:layout_width="wrap_content"
@@ -132,7 +132,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/btnHighlight" />
 
-        <eu.faircode.email.ViewButtonColor
+        <in.anoopbhatia.mail.ViewButtonColor
             android:id="@+id/btnColor"
             style="?android:attr/buttonStyleSmall"
             android:layout_width="wrap_content"
@@ -165,7 +165,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cbSeparatorLines" />
 
-        <eu.faircode.email.SpinnerEx
+        <in.anoopbhatia.mail.SpinnerEx
             android:id="@+id/spFontSize"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -183,7 +183,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/spFontSize" />
 
-        <eu.faircode.email.SpinnerEx
+        <in.anoopbhatia.mail.SpinnerEx
             android:id="@+id/spPadding"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -203,7 +203,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/spPadding" />
 
-        <eu.faircode.email.SpinnerEx
+        <in.anoopbhatia.mail.SpinnerEx
             android:id="@+id/spSubjectLines"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -255,7 +255,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cbAccountName" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -309,7 +309,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cbStandalone" />
 
-        <eu.faircode.email.ContentLoadingProgressBar
+        <in.anoopbhatia.mail.ContentLoadingProgressBar
             android:id="@+id/pbWait"
             style="@style/Base.Widget.AppCompat.ProgressBar"
             android:layout_width="wrap_content"

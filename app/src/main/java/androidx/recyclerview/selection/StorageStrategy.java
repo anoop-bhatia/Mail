@@ -22,6 +22,7 @@ import android.os.Bundle;
 import android.os.Parcelable;
 
 import androidx.annotation.VisibleForTesting;
+import androidx.core.os.BundleCompat;
 
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -191,13 +192,15 @@ public abstract class StorageStrategy<K> {
     private static class ParcelableStorageStrategy<K extends Parcelable>
             extends StorageStrategy<K> {
 
+        private final Class<K> mParcelableType;
+
         ParcelableStorageStrategy(@NonNull Class<K> type) {
             super(type);
             checkArgument(Parcelable.class.isAssignableFrom(type));
+            mParcelableType = type;
         }
 
         @Override
-        @SuppressWarnings("deprecation")
         public @Nullable Selection<K> asSelection(@NonNull Bundle state) {
 
             String keyType = state.getString(SELECTION_KEY_TYPE, null);
@@ -205,7 +208,8 @@ public abstract class StorageStrategy<K> {
                 return null;
             }
 
-            ArrayList<K> stored = state.getParcelableArrayList(SELECTION_ENTRIES);
+            ArrayList<K> stored = BundleCompat.getParcelableArrayList(
+                    state, SELECTION_ENTRIES, mParcelableType);
             if (stored == null) {
                 return null;
             }

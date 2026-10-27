@@ -458,13 +458,14 @@ public class MailDateFormat extends SimpleDateFormat {
         /**
          * @return the java.util.Calendar constant for the parsed month name
          */
-        @SuppressWarnings("fallthrough")
         final int parseMonthName(boolean caseSensitive) throws ParseException {
-            switch (getChar()) {
-                case 'j':
-                    if (caseSensitive) {
-                        break;
-                    }
+            int first = getChar();
+            // RFC month names use ASCII only. Do not accept Unicode case folds
+            // or consume another character: failure positions must stay intact.
+            if (!caseSensitive && first >= 'a' && first <= 'z') {
+                first = first - 'a' + 'A';
+            }
+            switch (first) {
                 case 'J':
                     if (skipChar('u') || (!caseSensitive && skipChar('U'))) {
                         if (skipChar('l') || (!caseSensitive
@@ -481,10 +482,6 @@ public class MailDateFormat extends SimpleDateFormat {
                         return Calendar.JANUARY;
                     }
                     break;
-                case 'm':
-                    if (caseSensitive) {
-                        break;
-                    }
                 case 'M':
                     if (skipChar('a') || (!caseSensitive && skipChar('A'))) {
                         if (skipChar('r') || (!caseSensitive
@@ -498,10 +495,6 @@ public class MailDateFormat extends SimpleDateFormat {
                         }
                     }
                     break;
-                case 'a':
-                    if (caseSensitive) {
-                        break;
-                    }
                 case 'A':
                     if (skipPair('u', 'g') || (!caseSensitive
                             && skipAlternativePair('u', 'U', 'g', 'G'))) {
@@ -511,50 +504,30 @@ public class MailDateFormat extends SimpleDateFormat {
                         return Calendar.APRIL;
                     }
                     break;
-                case 'd':
-                    if (caseSensitive) {
-                        break;
-                    }
                 case 'D':
                     if (skipPair('e', 'c') || (!caseSensitive
                             && skipAlternativePair('e', 'E', 'c', 'C'))) {
                         return Calendar.DECEMBER;
                     }
                     break;
-                case 'o':
-                    if (caseSensitive) {
-                        break;
-                    }
                 case 'O':
                     if (skipPair('c', 't') || (!caseSensitive
                             && skipAlternativePair('c', 'C', 't', 'T'))) {
                         return Calendar.OCTOBER;
                     }
                     break;
-                case 's':
-                    if (caseSensitive) {
-                        break;
-                    }
                 case 'S':
                     if (skipPair('e', 'p') || (!caseSensitive
                             && skipAlternativePair('e', 'E', 'p', 'P'))) {
                         return Calendar.SEPTEMBER;
                     }
                     break;
-                case 'n':
-                    if (caseSensitive) {
-                        break;
-                    }
                 case 'N':
                     if (skipPair('o', 'v') || (!caseSensitive
                             && skipAlternativePair('o', 'O', 'v', 'V'))) {
                         return Calendar.NOVEMBER;
                     }
                     break;
-                case 'f':
-                    if (caseSensitive) {
-                        break;
-                    }
                 case 'F':
                     if (skipPair('e', 'b') || (!caseSensitive
                             && skipAlternativePair('e', 'E', 'b', 'B'))) {

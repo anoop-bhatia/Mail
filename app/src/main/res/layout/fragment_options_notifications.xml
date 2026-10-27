@@ -951,7 +951,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvBackgroundHint" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spRateLimit"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

@@ -26,7 +26,6 @@ import android.graphics.Rect;
 import android.util.Log;
 
 import androidx.annotation.VisibleForTesting;
-import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.jspecify.annotations.NonNull;
@@ -109,7 +108,7 @@ final class ViewAutoScroller extends AutoScroller {
         if (VERBOSE) Log.v(TAG, "Running in background using event location @ " + mLastLocation);
 
         if (mLastLocation == null) {
-            eu.faircode.email.Log.w("ViewAutoScroller.mLastLocation is null");
+            in.anoopbhatia.mail.Log.w("ViewAutoScroller.mLastLocation is null");
             return;
         }
 
@@ -258,7 +257,7 @@ final class ViewAutoScroller extends AutoScroller {
 
         @Override
         void runAtNextFrame(@NonNull Runnable r) {
-            ViewCompat.postOnAnimation(mView, r);
+            mView.postOnAnimation(r);
         }
 
         @Override

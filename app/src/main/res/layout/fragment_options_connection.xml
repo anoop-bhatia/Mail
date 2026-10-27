@@ -125,7 +125,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvMeteredWarning" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spDownload"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -389,7 +389,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvTimeout" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etTimeout"
                     android:layout_width="100dp"
                     android:layout_height="wrap_content"
@@ -477,7 +477,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swDnsCustom" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etDnsExtra"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -857,7 +857,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/btnCiphers" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etHost"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -923,7 +923,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/rgEncryption" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etPort"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"

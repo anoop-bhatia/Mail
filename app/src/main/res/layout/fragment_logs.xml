@@ -5,9 +5,9 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_marginHorizontal="3dp"
-    tools:context="eu.faircode.email.ActivityView">
+    tools:context="in.anoopbhatia.mail.ActivityView">
 
-    <eu.faircode.email.FixedRecyclerView
+    <in.anoopbhatia.mail.FixedRecyclerView
         android:id="@+id/rvLog"
         android:layout_width="0dp"
         android:layout_height="0dp"
@@ -18,7 +18,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <eu.faircode.email.ContentLoadingProgressBar
+    <in.anoopbhatia.mail.ContentLoadingProgressBar
         android:id="@+id/pbWait"
         style="@style/Base.Widget.AppCompat.ProgressBar"
         android:layout_width="wrap_content"

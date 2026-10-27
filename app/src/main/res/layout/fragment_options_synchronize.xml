@@ -192,7 +192,7 @@
                     app:layout_constraintTop_toTopOf="@id/tvOptimizeHint"
                     app:srcCompat="@drawable/twotone_info_24" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spPollInterval"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -241,7 +241,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvPollHint" />
 
-                <eu.faircode.email.FixedRecyclerView
+                <in.anoopbhatia.mail.FixedRecyclerView
                     android:id="@+id/rvExempted"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -1186,7 +1186,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvUseBlocklistPopHint" />
 
-                <eu.faircode.email.FixedRecyclerView
+                <in.anoopbhatia.mail.FixedRecyclerView
                     android:id="@+id/rvBlocklist"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"

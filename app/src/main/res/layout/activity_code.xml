@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="eu.faircode.email.ActivityCode">
+    tools:context="in.anoopbhatia.mail.ActivityCode">
 
     <WebView
         android:id="@+id/wvCode"
@@ -14,7 +14,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <eu.faircode.email.ContentLoadingProgressBar
+    <in.anoopbhatia.mail.ContentLoadingProgressBar
         android:id="@+id/pbWait"
         style="@style/Base.Widget.AppCompat.ProgressBar"
         android:layout_width="wrap_content"

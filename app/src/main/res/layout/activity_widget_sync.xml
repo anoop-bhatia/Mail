@@ -7,7 +7,7 @@
     android:fadeScrollbars="false"
     android:padding="12dp"
     android:scrollbarStyle="outsideOverlay"
-    tools:context="eu.faircode.email.ActivityWidgetSync">
+    tools:context="in.anoopbhatia.mail.ActivityWidgetSync">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -37,7 +37,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cbDayNight" />
 
-        <eu.faircode.email.ViewButtonColor
+        <in.anoopbhatia.mail.ViewButtonColor
             android:id="@+id/btnColor"
             style="?android:attr/buttonStyleSmall"
             android:layout_width="wrap_content"

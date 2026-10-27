@@ -24,6 +24,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.pm.Signature;
+import android.content.pm.SigningInfo;
 import android.os.Build;
 import android.util.Log;
 
@@ -32,6 +33,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.RestrictTo;
 import androidx.annotation.VisibleForTesting;
+import androidx.core.content.pm.PackageInfoCompat;
 import androidx.core.provider.FontRequest;
 import androidx.core.util.Preconditions;
 
@@ -274,13 +276,12 @@ public final class DefaultEmojiCompatConfig {
         /**
          * Get the signing signatures for a package in package manager.
          */
-        @SuppressWarnings("deprecation") // using deprecated API to match exact behavior in core
         @NonNull
         public Signature[] getSigningSignatures(@NonNull PackageManager packageManager,
                 @NonNull String providerPackage) throws PackageManager.NameNotFoundException {
-            PackageInfo packageInfoForSignatures = packageManager.getPackageInfo(providerPackage,
-                    PackageManager.GET_SIGNATURES);
-            return packageInfoForSignatures.signatures;
+            List<Signature> signatures = PackageInfoCompat.getSignatures(packageManager,
+                    providerPackage);
+            return signatures.toArray(new Signature[0]);
         }
     }
 
@@ -291,20 +292,37 @@ public final class DefaultEmojiCompatConfig {
     @RequiresApi(28)
     public static class DefaultEmojiCompatConfigHelper_API28
             extends DefaultEmojiCompatConfigHelper {
-        @SuppressWarnings("deprecation") // using deprecated API to match exact behavior in core
         @Override
         @NonNull
         public Signature[] getSigningSignatures(@NonNull PackageManager packageManager,
                 @NonNull String providerPackage)
                 throws PackageManager.NameNotFoundException {
-            // This uses the deprecated GET_SIGNATURES currently to match the behavior in Core.
-            // When that behavior changes, we will need to update this method.
+            PackageInfo packageInfo = packageManager.getPackageInfo(providerPackage,
+                    PackageManager.GET_SIGNING_CERTIFICATES);
+            SigningInfo signingInfo = packageInfo != null ? packageInfo.signingInfo : null;
+            if (signingInfo == null) {
+                // Preserve the old missing-signatures failure in the request builder.
+                return null;
+            }
+            return getLegacySignatures(signingInfo.hasMultipleSigners(),
+                    signingInfo.getApkContentsSigners(),
+                    signingInfo.getSigningCertificateHistory());
+        }
 
-            // Alternatively, you may at that time introduce a new config option that allows
-            // skipping signature validations to avoid this code sync.
-            PackageInfo packageInfoForSignatures = packageManager.getPackageInfo(providerPackage,
-                    PackageManager.GET_SIGNATURES);
-            return packageInfoForSignatures.signatures;
+        /** Applies the ordering and cardinality of the deprecated {@code signatures} field. */
+        @VisibleForTesting
+        static <T> T[] getLegacySignatures(boolean hasMultipleSigners,
+                @Nullable T[] apkContentsSigners,
+                @Nullable T[] signingCertificateHistory) {
+            if (hasMultipleSigners) {
+                return apkContentsSigners;
+            }
+            if (signingCertificateHistory == null || signingCertificateHistory.length == 0) {
+                return signingCertificateHistory;
+            }
+            // History is ordered oldest first. Core FontProvider still checks the
+            // legacy singleton, not all certificates and not only the current signer.
+            return java.util.Arrays.copyOf(signingCertificateHistory, 1);
         }
     }
 }

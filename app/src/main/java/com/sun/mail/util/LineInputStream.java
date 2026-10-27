@@ -85,7 +85,6 @@ public class LineInputStream extends FilterInputStream {
      * @return		the line
      * @exception	IOException	for I/O errors
      */
-    @SuppressWarnings("deprecation")	// for old String constructor
     public String readLine() throws IOException {
 	//InputStream in = this.in;
 	byte[] buf = lineBuffer;

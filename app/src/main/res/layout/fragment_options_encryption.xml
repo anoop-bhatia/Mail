@@ -241,7 +241,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvCaptionPgp" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spOpenPgp"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -367,7 +367,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvCaptionSmime" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spSignAlgoSmime"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -389,7 +389,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/spSignAlgoSmime" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spEncryptAlgoSmime"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

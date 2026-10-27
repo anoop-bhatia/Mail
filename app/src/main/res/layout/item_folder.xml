@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <eu.faircode.email.ViewCardOptional
+    <in.anoopbhatia.mail.ViewCardOptional
         android:id="@+id/card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
@@ -16,7 +16,7 @@
             android:background="?attr/activatableItemBackground"
             android:foreground="?attr/selectableItemBackground">
 
-            <eu.faircode.email.ViewStripe
+            <in.anoopbhatia.mail.ViewStripe
                 android:id="@+id/vwColor"
                 android:layout_width="6dp"
                 android:layout_height="0dp"
@@ -337,5 +337,5 @@
                 android:layout_height="0dp"
                 app:constraint_referenced_ids="ivType,tvType,tvTotal,tvAfter,ibSync" />
         </androidx.constraintlayout.widget.ConstraintLayout>
-    </eu.faircode.email.ViewCardOptional>
+    </in.anoopbhatia.mail.ViewCardOptional>
 </FrameLayout>

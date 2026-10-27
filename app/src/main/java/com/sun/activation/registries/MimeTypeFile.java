@@ -15,7 +15,7 @@ import java.util.*;
 
 public class MimeTypeFile {
     private String fname = null;
-    private Hashtable type_hash = new Hashtable();
+    private Hashtable<String, MimeTypeEntry> type_hash = new Hashtable<>();
 
     /**
      * The construtor that takes a filename as an argument.
@@ -57,7 +57,7 @@ public class MimeTypeFile {
      * get the MimeTypeEntry based on the file extension
      */
     public MimeTypeEntry getMimeTypeEntry(String file_ext) {
-	return (MimeTypeEntry)type_hash.get((Object)file_ext);
+	return type_hash.get(file_ext);
     }
 
     /**
@@ -200,7 +200,7 @@ class LineTokenizer {
     private int currentPosition;
     private int maxPosition;
     private String str;
-    private Vector stack = new Vector();
+    private Vector<String> stack = new Vector<>();
     private static final String singles = "=";	// single character tokens
 
     /**
@@ -248,7 +248,7 @@ class LineTokenizer {
     public String nextToken() {
 	int size = stack.size();
 	if (size > 0) {
-	    String t = (String)stack.elementAt(size - 1);
+	    String t = stack.elementAt(size - 1);
 	    stack.removeElementAt(size - 1);
 	    return t;
 	}

@@ -590,14 +590,14 @@ public class IMAPMessage extends MimeMessage implements ReadableMime {
 							"plain".equalsIgnoreCase(bs.subtype)) ||
 							!(bs.type.equalsIgnoreCase(ct.getPrimaryType()) &&
 									bs.subtype.equalsIgnoreCase(ct.getSubType()))) {
-						eu.faircode.email.Log.i("Inconsistent" +
+						in.anoopbhatia.mail.Log.i("Inconsistent" +
 								" bs=" + bs.type + "/" + bs.subtype + "/" + bs.cParams + " header=" + ct);
 						type = ct.toString();
 						return type;
 					}
 				}
 			} catch (MessagingException ex) {
-				eu.faircode.email.Log.e(ex);
+				in.anoopbhatia.mail.Log.e(ex);
 			}
 
 	    // generate content-type from BODYSTRUCTURE
@@ -1223,22 +1223,25 @@ public class IMAPMessage extends MimeMessage implements ReadableMime {
 	 * @param	fp	the FetchProfile
 	 * @param	fitems	the FETCH items
 	 */
-	@SuppressWarnings("deprecation")	// for FetchProfile.Item.SIZE
-	public FetchProfileCondition(FetchProfile fp, FetchItem[] fitems) {
+		public FetchProfileCondition(FetchProfile fp, FetchItem[] fitems) {
 	    if (fp.contains(FetchProfile.Item.ENVELOPE))
 		needEnvelope = true;
 	    if (fp.contains(FetchProfile.Item.FLAGS))
 		needFlags = true;
 	    if (fp.contains(FetchProfile.Item.CONTENT_INFO))
 		needBodyStructure = true;
-	    if (fp.contains(FetchProfile.Item.SIZE))
-		needSize = true;
-	    if (fp.contains(UIDFolder.FetchProfileItem.UID))
+		    if (fp.contains(UIDFolder.FetchProfileItem.UID))
 		needUID = true;
 	    if (fp.contains(IMAPFolder.FetchProfileItem.HEADERS))
 		needHeaders = true;
-	    if (fp.contains(IMAPFolder.FetchProfileItem.SIZE))
-		needSize = true;
+		    for (FetchProfile.Item item : fp.getItems()) {
+			if (item == FetchProfile.Item.SIZE ||
+				    item instanceof IMAPFolder.FetchProfileItem &&
+					((IMAPFolder.FetchProfileItem)item).needSize) {
+			    needSize = true;
+			    break;
+			}
+		    }
 	    if (fp.contains(IMAPFolder.FetchProfileItem.MESSAGE))
 		needMessage = true;
 	    if (fp.contains(IMAPFolder.FetchProfileItem.INTERNALDATE))
@@ -1773,7 +1776,7 @@ public class IMAPMessage extends MimeMessage implements ReadableMime {
                 envelope.inReplyTo == null &&
                 envelope.messageId == null &&
                 headersLoaded && (headers == null || !headers.getAllHeaders().hasMoreElements())) {
-			eu.faircode.email.Log.w("Expunged workaround host=" + ((IMAPStore) folder.getStore()).host);
+			in.anoopbhatia.mail.Log.w("Expunged workaround host=" + ((IMAPStore) folder.getStore()).host);
 			return true;
 		}
 

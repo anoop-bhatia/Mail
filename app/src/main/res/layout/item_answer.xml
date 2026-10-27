@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <eu.faircode.email.ViewCardOptional
+    <in.anoopbhatia.mail.ViewCardOptional
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
@@ -16,7 +16,7 @@
             android:foreground="?attr/selectableItemBackground"
             android:paddingEnd="6dp">
 
-            <eu.faircode.email.ViewStripe
+            <in.anoopbhatia.mail.ViewStripe
                 android:id="@+id/vwColor"
                 android:layout_width="6dp"
                 android:layout_height="0dp"
@@ -123,5 +123,5 @@
                 app:layout_constraintTop_toTopOf="parent"
                 app:srcCompat="@drawable/twotone_quickreply_24" />
         </androidx.constraintlayout.widget.ConstraintLayout>
-    </eu.faircode.email.ViewCardOptional>
+    </in.anoopbhatia.mail.ViewCardOptional>
 </FrameLayout>

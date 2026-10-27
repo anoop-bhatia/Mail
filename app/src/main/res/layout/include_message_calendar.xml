@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    tools:context="eu.faircode.email.ActivityView">
+    tools:context="in.anoopbhatia.mail.ActivityView">
 
     <View
         android:id="@+id/vSeparatorCalendar"
@@ -173,7 +173,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/btnCalendarMaybe" />
 
-    <eu.faircode.email.ContentLoadingProgressBar
+    <in.anoopbhatia.mail.ContentLoadingProgressBar
         android:id="@+id/pbCalendarWait"
         style="@style/Base.Widget.AppCompat.ProgressBar"
         android:layout_width="wrap_content"

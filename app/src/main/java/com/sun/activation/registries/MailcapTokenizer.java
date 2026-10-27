@@ -125,7 +125,7 @@ public class MailcapTokenizer {
 		if (isAutoquoting) {
 		    if (c == ';' || c == '=') {
 			currentToken = c;
-			currentTokenValue = new Character(c).toString();
+			currentTokenValue = Character.valueOf(c).toString();
 			++dataIndex;
 		    } else {
 			processAutoquoteToken();
@@ -135,11 +135,11 @@ public class MailcapTokenizer {
 			processStringToken();
 		    } else if ((c == '/') || (c == ';') || (c == '=')) {
 			currentToken = c;
-			currentTokenValue = new Character(c).toString();
+			currentTokenValue = Character.valueOf(c).toString();
 			++dataIndex;
 		    } else {
 			currentToken = UNKNOWN_TOKEN;
-			currentTokenValue = new Character(c).toString();
+			currentTokenValue = Character.valueOf(c).toString();
 			++dataIndex;
 		    }
 		}

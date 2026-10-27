@@ -45,7 +45,7 @@ final class CarConnectionTypeLiveData extends LiveData<@ConnectionType Integer> 
     @VisibleForTesting
     static final String CAR_CONNECTION_AUTHORITY = "androidx.car.app.connection";
 
-    private static final String TAG_CONNECTION_TO_CAR = "fairemail";
+    private static final String TAG_CONNECTION_TO_CAR = "mail";
     private static final int QUERY_TOKEN = 42;
     private static final Uri PROJECTION_HOST_URI = new Uri.Builder().scheme("content").authority(
             CAR_CONNECTION_AUTHORITY).build();

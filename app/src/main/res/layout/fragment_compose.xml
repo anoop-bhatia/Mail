@@ -4,12 +4,12 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="eu.faircode.email.ActivityCompose">
+    tools:context="in.anoopbhatia.mail.ActivityCompose">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:layout_behavior="eu.faircode.email.BehaviorBottomPadding">
+        app:layout_behavior="in.anoopbhatia.mail.BehaviorBottomPadding">
 
         <View
             android:id="@+id/vwAnchorMenu"
@@ -30,7 +30,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spIdentity"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -40,7 +40,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etExtra"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -82,7 +82,7 @@
                     app:layout_constraintTop_toTopOf="@+id/etTo"
                     app:srcCompat="@drawable/twotone_person_24" />
 
-                <eu.faircode.email.EditTextMultiAutoComplete
+                <in.anoopbhatia.mail.EditTextMultiAutoComplete
                     android:id="@+id/etTo"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -145,7 +145,7 @@
                     app:layout_constraintTop_toTopOf="@+id/etCc"
                     app:srcCompat="@drawable/twotone_people_24" />
 
-                <eu.faircode.email.EditTextMultiAutoComplete
+                <in.anoopbhatia.mail.EditTextMultiAutoComplete
                     android:id="@+id/etCc"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -193,7 +193,7 @@
                     app:layout_constraintTop_toTopOf="@+id/etBcc"
                     app:srcCompat="@drawable/twotone_supervisor_account_24" />
 
-                <eu.faircode.email.EditTextMultiAutoComplete
+                <in.anoopbhatia.mail.EditTextMultiAutoComplete
                     android:id="@+id/etBcc"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -228,7 +228,7 @@
                     app:srcCompat="@drawable/twotone_person_add_24"
                     app:tint="?attr/colorAccent" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etSubject"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -295,7 +295,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/ibExpanderAttachments" />
 
-                <eu.faircode.email.FixedRecyclerView
+                <in.anoopbhatia.mail.FixedRecyclerView
                     android:id="@+id/rvAttachment"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -363,7 +363,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvResend" />
 
-                <eu.faircode.email.EditTextCompose
+                <in.anoopbhatia.mail.EditTextCompose
                     android:id="@+id/etBody"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -616,7 +616,7 @@
             app:layout_constraintBottom_toTopOf="@+id/etSearch"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <eu.faircode.email.TextViewAutoCompleteAction
+        <in.anoopbhatia.mail.TextViewAutoCompleteAction
             android:id="@+id/etSearch"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -667,7 +667,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:menu="@menu/action_compose" />
 
-        <eu.faircode.email.ContentLoadingProgressBar
+        <in.anoopbhatia.mail.ContentLoadingProgressBar
             android:id="@+id/pbWait"
             style="@style/Base.Widget.AppCompat.ProgressBar"
             android:layout_width="wrap_content"

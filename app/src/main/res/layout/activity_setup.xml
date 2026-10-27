@@ -4,7 +4,7 @@
     android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="eu.faircode.email.ActivitySetup">
+    tools:context="in.anoopbhatia.mail.ActivitySetup">
 
     <FrameLayout
         android:id="@+id/content_frame"
@@ -18,13 +18,20 @@
         android:layout_gravity="start"
         android:background="?attr/colorDrawerBackground">
 
-        <eu.faircode.email.FixedRecyclerView
+        <in.anoopbhatia.mail.FixedRecyclerView
             android:id="@+id/rvMenu"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/navFooter"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
+        <include
+            layout="@layout/include_nav_footer"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.drawerlayout.widget.DrawerLayout>

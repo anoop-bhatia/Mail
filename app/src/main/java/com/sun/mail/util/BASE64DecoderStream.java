@@ -17,6 +17,7 @@
 package com.sun.mail.util;
 
 import java.io.*;
+import in.anoopbhatia.mail.BuildConfig;
 
 /**
  * This class implements a BASE64 Decoder. It is implemented as
@@ -354,7 +355,7 @@ public class BASE64DecoderStream extends FilterInputStream {
 		return -2;
 	    // no, convert it
 	    c = pem_convert_array[c];
-	    if (c == -1 && ++bad > 10 && eu.faircode.email.BuildConfig.DEBUG)
+	    if (c == -1 && ++bad > 10 && BuildConfig.DEBUG)
 		    return -1;
 	    // loop until we get a legitimate byte
 	} while (c == -1);

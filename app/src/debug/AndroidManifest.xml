@@ -24,9 +24,6 @@
     <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
-
-    <uses-permission android:name="com.android.vending.BILLING" />
-
     <!-- OAuth -->
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission
@@ -125,7 +122,7 @@
         android:name=".ApplicationSecure"
         android:allowBackup="true"
         android:appCategory="productivity"
-        android:backupAgent=".FairEmailBackupAgent"
+        android:backupAgent=".MailBackupAgent"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:description="@string/app_name"
         android:forceDarkAllowed="false"
@@ -141,7 +138,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.TranslucentSplash"
-        tools:replace="android:networkSecurityConfig,android:memtagMode">
+        tools:replace="android:networkSecurityConfig">
         <!-- https://developer.android.com/ndk/guides/arm-mte -->
         <!-- https://developer.samsung.com/samsung-dex/modify-optimizing.html -->
 
@@ -227,7 +224,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:scheme="https" />
-                <data android:host="link.fairemail.net" />
+                <data android:host="anoopbhatia.in" />
             </intent-filter>
 
             <intent-filter>
@@ -542,16 +539,7 @@
                 <data android:host="*" />
             </intent-filter>
         </activity>
-
-        <activity
-            android:name=".ActivityBilling"
-            android:exported="false"
-            android:icon="@mipmap/ic_launcher"
-            android:launchMode="singleTask"
-            android:resizeableActivity="true"
-            android:taskAffinity="${applicationId}.BILLING" />
-
-        <!-- https://developer.android.com/training/permissions/explaining-access -->
+<!-- https://developer.android.com/training/permissions/explaining-access -->
         <activity
             android:name=".ActivityRationale"
             android:description="@string/app_name"
@@ -584,7 +572,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="oauth.faircode.eu"
+                    android:host="anoopbhatia.in"
                     android:scheme="https" />
             </intent-filter>
 
@@ -623,16 +611,26 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="eu.faircode.email.debug" />
+                <data
+                    android:path="${gmailRedirectPath}"
+                    android:scheme="${gmailRedirectScheme}" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:host="${applicationId}"
-                    android:path="/PJ0gvpIEttFzi8fXtHIjtsBz+T8="
-                    android:scheme="msauth" />
+                    android:host="${microsoftRedirectHost}"
+                    android:path="${microsoftRedirectPath}"
+                    android:scheme="${microsoftRedirectScheme}" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="${zohoRedirectHost}"
+                    android:scheme="${zohoRedirectScheme}" />
             </intent-filter>
         </activity>
 
@@ -657,7 +655,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="FairEmail is an email app. Users expect to receive instant new email notifications, and the app to be auto-started. A foreground service is required to keep a continuous connection to email servers to listen for push messages via IMAP IDLE, for which there is no Firebase Cloud Messaging integration. Other foreground service types do not fit this use case, or can't be used on Android 15 because there are time limits or auto-starting on boot is not allowed. Using the Android work manager isn't an option either." />
+                android:value="Mail is an email app. Users expect to receive instant new email notifications, and the app to be auto-started. A foreground service is required to keep a continuous connection to email servers to listen for push messages via IMAP IDLE, for which there is no Firebase Cloud Messaging integration. Other foreground service types do not fit this use case, or can't be used on Android 15 because there are time limits or auto-starting on boot is not allowed. Using the Android work manager isn't an option either." />
         </service>
 
         <service
@@ -666,7 +664,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="FairEmail is an email app. Users expect to receive instant new email notifications, and the app to be auto-started. A foreground service is required to keep a continuous connection to email servers to listen for push messages via IMAP IDLE, for which there is no Firebase Cloud Messaging integration. Other foreground service types do not fit this use case, or can't be used on Android 15 because there are time limits or auto-starting on boot is not allowed. Using the Android work manager isn't an option either." />
+                android:value="Mail is an email app. Users expect to receive instant new email notifications, and the app to be auto-started. A foreground service is required to keep a continuous connection to email servers to listen for push messages via IMAP IDLE, for which there is no Firebase Cloud Messaging integration. Other foreground service types do not fit this use case, or can't be used on Android 15 because there are time limits or auto-starting on boot is not allowed. Using the Android work manager isn't an option either." />
         </service>
 
         <service
@@ -731,8 +729,11 @@
             </intent-filter>
         </service>
 
+        <!-- ControlsProviderService exists only on API 30+; keep it disabled on older
+             releases and enable it only from API-30-guarded code. -->
         <service
             android:name=".ServicePowerControl"
+            tools:targetApi="30"
             android:enabled="false"
             android:exported="true"
             android:label="@string/app_name"

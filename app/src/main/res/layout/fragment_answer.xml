@@ -4,12 +4,12 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="eu.faircode.email.ActivityView">
+    tools:context="in.anoopbhatia.mail.ActivityView">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:layout_behavior="eu.faircode.email.BehaviorBottomPadding">
+        app:layout_behavior="in.anoopbhatia.mail.BehaviorBottomPadding">
 
         <ScrollView
             android:layout_width="match_parent"
@@ -22,7 +22,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content">
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etName"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -37,7 +37,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etLabel"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -52,7 +52,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@+id/etName" />
 
-                <eu.faircode.email.EditTextAutoComplete
+                <in.anoopbhatia.mail.EditTextAutoComplete
                     android:id="@+id/etGroup"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -137,7 +137,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@+id/cbHide" />
 
-                <eu.faircode.email.ViewButtonColor
+                <in.anoopbhatia.mail.ViewButtonColor
                     android:id="@+id/btnColor"
                     style="?android:attr/buttonStyleSmall"
                     android:layout_width="wrap_content"
@@ -159,7 +159,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@+id/btnColor" />
 
-                <eu.faircode.email.EditTextCompose
+                <in.anoopbhatia.mail.EditTextCompose
                     android:id="@+id/etText"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -206,7 +206,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:menu="@menu/action_answer" />
 
-        <eu.faircode.email.ContentLoadingProgressBar
+        <in.anoopbhatia.mail.ContentLoadingProgressBar
             android:id="@+id/pbWait"
             style="@style/Base.Widget.AppCompat.ProgressBar"
             android:layout_width="wrap_content"

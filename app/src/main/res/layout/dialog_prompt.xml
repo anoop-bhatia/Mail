@@ -22,7 +22,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etPrompt"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -36,6 +36,6 @@
             app:layout_constraintTop_toBottomOf="@id/tvPrompt">
 
             <requestFocus />
-        </eu.faircode.email.EditTextPlain>
+        </in.anoopbhatia.mail.EditTextPlain>
     </androidx.constraintlayout.widget.ConstraintLayout>
 </ScrollView>

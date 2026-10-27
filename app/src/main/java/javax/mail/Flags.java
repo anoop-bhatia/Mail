@@ -169,11 +169,10 @@ public class Flags implements Cloneable, Serializable {
      *
      * @param flags	the flags for initialization
      */
-    @SuppressWarnings("unchecked")
     public Flags(Flags flags) {
 	this.system_flags = flags.system_flags;
 	if (flags.user_flags != null)
-	    this.user_flags = (Hashtable)flags.user_flags.clone();
+	    this.user_flags = copyUserFlags(flags.user_flags);
     }
 
     /**
@@ -478,7 +477,6 @@ public class Flags implements Cloneable, Serializable {
     /**
      * Returns a clone of this Flags object.
      */
-    @SuppressWarnings("unchecked")
     @Override
     public Object clone() {
 	Flags f = null;
@@ -488,8 +486,17 @@ public class Flags implements Cloneable, Serializable {
 	    // ignore, can't happen
 	}
 	if (this.user_flags != null)
-	    f.user_flags = (Hashtable)this.user_flags.clone();
+	    f.user_flags = copyUserFlags(this.user_flags);
 	return f;
+    }
+
+    private static Hashtable<String, String> copyUserFlags(
+	    Hashtable<String, String> flags) {
+	// Hashtable.clone held this monitor for the complete snapshot. Keep that
+	// boundary while using the typed collection constructor instead of a cast.
+	synchronized (flags) {
+	    return new Hashtable<>(flags);
+	}
     }
 
     /**

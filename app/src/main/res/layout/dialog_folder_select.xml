@@ -105,7 +105,7 @@
         app:layout_constraintTop_toTopOf="@id/btnFavorite1"
         app:srcCompat="@drawable/twotone_cancel_24" />
 
-    <eu.faircode.email.FixedRecyclerView
+    <in.anoopbhatia.mail.FixedRecyclerView
         android:id="@+id/rvFolder"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -139,7 +139,7 @@
         app:srcCompat="@drawable/twotone_add_24"
         app:tint="?attr/colorFabForeground" />
 
-    <eu.faircode.email.ContentLoadingProgressBar
+    <in.anoopbhatia.mail.ContentLoadingProgressBar
         android:id="@+id/pbWait"
         style="@style/Base.Widget.AppCompat.ProgressBar"
         android:layout_width="wrap_content"

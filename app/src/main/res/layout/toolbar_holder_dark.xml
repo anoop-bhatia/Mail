@@ -3,14 +3,14 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="eu.faircode.email.ActivityView">
+    tools:context="in.anoopbhatia.mail.ActivityView">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-        <eu.faircode.email.ToolbarEx
+        <in.anoopbhatia.mail.ToolbarEx
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
@@ -63,7 +63,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/title" />
             </androidx.constraintlayout.widget.ConstraintLayout>
-        </eu.faircode.email.ToolbarEx>
+        </in.anoopbhatia.mail.ToolbarEx>
     </com.google.android.material.appbar.AppBarLayout>
 
     <View

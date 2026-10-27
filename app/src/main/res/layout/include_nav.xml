@@ -112,7 +112,7 @@
         app:layout_constraintTop_toBottomOf="@id/vSeparatorOptions"
         app:srcCompat="@drawable/expander3" />
 
-    <eu.faircode.email.FixedRecyclerView
+    <in.anoopbhatia.mail.FixedRecyclerView
         android:id="@+id/rvAccount"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -143,7 +143,7 @@
         app:layout_constraintTop_toBottomOf="@id/vSeparatorAccount"
         app:srcCompat="@drawable/expander" />
 
-    <eu.faircode.email.FixedRecyclerView
+    <in.anoopbhatia.mail.FixedRecyclerView
         android:id="@+id/rvUnified"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -174,7 +174,7 @@
         app:layout_constraintTop_toBottomOf="@id/vSeparatorUnified"
         app:srcCompat="@drawable/expander" />
 
-    <eu.faircode.email.FixedRecyclerView
+    <in.anoopbhatia.mail.FixedRecyclerView
         android:id="@+id/rvSearch"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -205,7 +205,7 @@
         app:layout_constraintTop_toBottomOf="@id/vSeparatorSearch"
         app:srcCompat="@drawable/expander" />
 
-    <eu.faircode.email.FixedRecyclerView
+    <in.anoopbhatia.mail.FixedRecyclerView
         android:id="@+id/rvMenu"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -236,7 +236,7 @@
         app:layout_constraintTop_toBottomOf="@id/vSeparatorMenu"
         app:srcCompat="@drawable/expander" />
 
-    <eu.faircode.email.FixedRecyclerView
+    <in.anoopbhatia.mail.FixedRecyclerView
         android:id="@+id/rvMenuExtra"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -245,4 +245,11 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/ibExpanderExtra" />
+    <include
+        layout="@layout/include_nav_footer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/rvMenuExtra" />
 </androidx.constraintlayout.widget.ConstraintLayout>

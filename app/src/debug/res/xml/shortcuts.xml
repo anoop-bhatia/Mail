@@ -5,9 +5,9 @@
         android:shortcutId="refresh"
         android:shortcutShortLabel="@string/shortcut_refresh">
         <intent
-            android:action="eu.faircode.email.REFRESH"
-            android:targetClass="eu.faircode.email.debug.ActivityMain"
-            android:targetPackage="eu.faircode.email.debug" />
+            android:action="in.anoopbhatia.mail.REFRESH"
+            android:targetClass="in.anoopbhatia.mail.debug.ActivityMain"
+            android:targetPackage="in.anoopbhatia.mail.debug" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 
@@ -18,13 +18,13 @@
         android:shortcutShortLabel="@string/shortcut_compose">
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetClass="eu.faircode.email.ActivityCompose"
-            android:targetPackage="eu.faircode.email.debug" />
+            android:targetClass="in.anoopbhatia.mail.ActivityCompose"
+            android:targetPackage="in.anoopbhatia.mail.debug" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 
-    <share-target android:targetClass="eu.faircode.email.debug.ActivityCompose">
-        <category android:name="eu.faircode.email.debug.TEXT_SHARE_TARGET" />
+    <share-target android:targetClass="in.anoopbhatia.mail.debug.ActivityCompose">
+        <category android:name="in.anoopbhatia.mail.debug.TEXT_SHARE_TARGET" />
         <data android:mimeType="text/plain" />
     </share-target>
 </shortcuts>

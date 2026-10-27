@@ -166,7 +166,6 @@ public class DigestMD5 {
      *
      * @return	Map containing key/value pairs from server
      */
-    @SuppressWarnings("fallthrough")
     private Map<String, String> tokenize(String serverResponse)
 	    throws IOException {
 	Map<String, String> map	= new HashMap<>();
@@ -185,14 +184,9 @@ public class DigestMD5 {
 	tokens.ordinaryChars('0', '9');	// reset digits
 	tokens.wordChars('0', '9');	// digits may start words
 	while ((ttype = tokens.nextToken()) != StreamTokenizer.TT_EOF) {
-	    switch (ttype) {
-	    case StreamTokenizer.TT_WORD:
-		if (key == null) {
-		    key = tokens.sval;
-		    break;
-		}
-		// fall-thru
-	    case '"':
+	    if (ttype == StreamTokenizer.TT_WORD && key == null) {
+		key = tokens.sval;
+	    } else if (ttype == StreamTokenizer.TT_WORD || ttype == '"') {
 		if (logger.isLoggable(Level.FINE))
 		    logger.fine("Received => " +
 			 	 key + "='" + tokens.sval + "'");
@@ -202,9 +196,6 @@ public class DigestMD5 {
 		    map.put(key, tokens.sval);
 		}
 		key = null;
-		break;
-	    default:	// XXX - should never happen?
-		break;
 	    }
 	}
 	return map;

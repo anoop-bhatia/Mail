@@ -1,0 +1,172 @@
+[versions]
+agp = "9.4.1"
+kotlin = "2.4.21"
+kotlinMetadata = "2.4.21"
+downloadPlugin = "5.7.0"
+desugar = "2.1.5"
+startup = "1.2.0"
+annotationExperimental = "1.6.0"
+core = "1.19.1"
+coreRemoteviews = "1.1.0"
+appcompat = "1.8.0"
+appcompatColorpicker = "1.8.0"
+emoji = "1.7.0"
+flatbuffers = "25.2.10"
+activity = "1.13.0"
+fragment = "1.9.1"
+window = "1.5.1"
+webkit = "1.17.1"
+recyclerview = "1.4.0"
+viewpager2 = "1.1.0"
+coordinatorlayout = "1.3.0"
+constraintlayout = "2.2.2"
+material = "1.14.0"
+browser = "1.10.0"
+swiperefreshlayout = "1.2.0"
+documentfile = "1.1.0"
+lifecycle = "2.11.0"
+archCore = "2.2.0"
+room = "2.8.5"
+paging = "3.5.3"
+sqlite = "2.6.2"
+preference = "1.2.1"
+work = "2.12.0"
+guava = "33.7.2-android"
+exif = "1.4.2"
+biometric = "1.2.0-alpha05"
+playServicesBasement = "18.12.0"
+playServicesAuth = "22.0.0"
+transparency = "2.8.20"
+okhttp = "5.5.0"
+jsoup = "1.23.2"
+jsonpath = "3.0.0"
+cssparser = "0.9.30"
+w3cDom = "2.3.0-jaxb-1.0.6"
+kxml = "2.3.0"
+minidns = "1.1.1"
+shortcutBadger = "1.1.22"
+biweekly = "0.6.8"
+ezVcard = "0.12.2"
+markwon = "4.6.2"
+commonmark = "0.30.1"
+flexmark = "0.64.8"
+bouncycastle = "1.86"
+bcprov = "1.86"
+bcutil = "1.86"
+overscroll = "1.1.1"
+appauth = "0.11.1"
+jcharset = "2.1"
+apachePoi = "5.5.1"
+outlookParser = "1.16.2"
+reactivestreams = "1.0.4"
+rxjava = "3.1.12"
+androidsvg = "1.4"
+commonsCompress = "1.28.0"
+ipaddress = "5.6.2"
+leakcanary = "2.14"
+websocket = "2.14"
+tinylog = "2.8.1"
+zxing = "3.5.4"
+evalex = "3.7.0"
+imageCropper = "4.7.0"
+heifwriter = "1.1.0"
+junit = "4.13.2"
+json = "20260814"
+sqliteJdbc = "3.53.4.0"
+
+[libraries]
+android-tools-desugar-jdk-libs-nio = { group = "com.android.tools", name = "desugar_jdk_libs_nio", version.ref = "desugar" }
+androidx-startup-runtime = { group = "androidx.startup", name = "startup-runtime", version.ref = "startup" }
+androidx-annotation-experimental = { group = "androidx.annotation", name = "annotation-experimental", version.ref = "annotationExperimental" }
+androidx-core = { group = "androidx.core", name = "core", version.ref = "core" }
+androidx-core-remoteviews = { group = "androidx.core", name = "core-remoteviews", version.ref = "coreRemoteviews" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-appcompat-colorpicker = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompatColorpicker" }
+androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
+androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
+androidx-window-java = { group = "androidx.window", name = "window-java", version.ref = "window" }
+androidx-emoji2 = { group = "androidx.emoji2", name = "emoji2", version.ref = "emoji" }
+com-google-flatbuffers-java = { group = "com.google.flatbuffers", name = "flatbuffers-java", version.ref = "flatbuffers" }
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
+androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }
+androidx-coordinatorlayout = { group = "androidx.coordinatorlayout", name = "coordinatorlayout", version.ref = "coordinatorlayout" }
+androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+com-google-android-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
+androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefreshlayout", version.ref = "swiperefreshlayout" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
+androidx-arch-core-runtime = { group = "androidx.arch.core", name = "core-runtime", version.ref = "archCore" }
+androidx-lifecycle-runtime = { group = "androidx.lifecycle", name = "lifecycle-runtime", version.ref = "lifecycle" }
+androidx-lifecycle-livedata = { group = "androidx.lifecycle", name = "lifecycle-livedata", version.ref = "lifecycle" }
+androidx-lifecycle-livedata-core = { group = "androidx.lifecycle", name = "lifecycle-livedata-core", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel-savedstate = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-savedstate", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "lifecycle" }
+androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycle" }
+androidx-lifecycle-service = { group = "androidx.lifecycle", name = "lifecycle-service", version.ref = "lifecycle" }
+androidx-paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
+androidx-room-paging = { group = "androidx.room", name = "room-paging", version.ref = "room" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-common = { group = "androidx.room", name = "room-common", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-sqlite = { group = "androidx.sqlite", name = "sqlite", version.ref = "sqlite" }
+androidx-sqlite-framework = { group = "androidx.sqlite", name = "sqlite-framework", version.ref = "sqlite" }
+androidx-preference = { group = "androidx.preference", name = "preference", version.ref = "preference" }
+androidx-work-runtime = { group = "androidx.work", name = "work-runtime", version.ref = "work" }
+com-google-guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exif" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+com-google-android-gms-play-services-basement = { group = "com.google.android.gms", name = "play-services-basement", version.ref = "playServicesBasement" }
+com-google-android-gms-play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
+com-appmattus-certificatetransparency-android = { group = "com.appmattus.certificatetransparency", name = "certificatetransparency-android", version.ref = "transparency" }
+com-squareup-okhttp3 = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+org-jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
+com-jayway-jsonpath = { group = "com.jayway.jsonpath", name = "json-path", version.ref = "jsonpath" }
+net-sourceforge-cssparser = { group = "net.sourceforge.cssparser", name = "cssparser", version.ref = "cssparser" }
+org-w3c-dom = { group = "org.w3c", name = "dom", version.ref = "w3cDom" }
+net-sf-kxml = { group = "net.sf.kxml", name = "kxml2", version.ref = "kxml" }
+org-minidns-hla = { group = "org.minidns", name = "minidns-hla", version.ref = "minidns" }
+me-leolin-shortcutbadger = { group = "me.leolin", name = "ShortcutBadger", version.ref = "shortcutBadger" }
+net-sf-biweekly = { group = "net.sf.biweekly", name = "biweekly", version.ref = "biweekly" }
+com-googlecode-ez-vcard = { group = "com.googlecode.ez-vcard", name = "ez-vcard", version.ref = "ezVcard" }
+io-noties-markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
+io-noties-markwon-html = { group = "io.noties.markwon", name = "html", version.ref = "markwon" }
+io-noties-markwon-editor = { group = "io.noties.markwon", name = "editor", version.ref = "markwon" }
+org-commonmark-commonmark = { group = "org.commonmark", name = "commonmark", version.ref = "commonmark" }
+org-commonmark-ext-ins = { group = "org.commonmark", name = "commonmark-ext-ins", version.ref = "commonmark" }
+org-commonmark-ext-task-list-items = { group = "org.commonmark", name = "commonmark-ext-task-list-items", version.ref = "commonmark" }
+org-commonmark-ext-gfm-tables = { group = "org.commonmark", name = "commonmark-ext-gfm-tables", version.ref = "commonmark" }
+org-commonmark-ext-gfm-strikethrough = { group = "org.commonmark", name = "commonmark-ext-gfm-strikethrough", version.ref = "commonmark" }
+com-vladsch-flexmark-html2md-converter = { group = "com.vladsch.flexmark", name = "flexmark-html2md-converter", version.ref = "flexmark" }
+io-github-everythingme-overscroll-decor-android = { group = "io.github.everythingme", name = "overscroll-decor-android", version.ref = "overscroll" }
+org-bouncycastle-bcpkix-jdk15to18 = { group = "org.bouncycastle", name = "bcpkix-jdk15to18", version.ref = "bouncycastle" }
+org-bouncycastle-bctls-jdk15to18 = { group = "org.bouncycastle", name = "bctls-jdk15to18", version.ref = "bouncycastle" }
+org-bouncycastle-bcprov-jdk15to18 = { group = "org.bouncycastle", name = "bcprov-jdk15to18", version.ref = "bcprov" }
+org-bouncycastle-bcutil-jdk15to18 = { group = "org.bouncycastle", name = "bcutil-jdk15to18", version.ref = "bcutil" }
+net-openid-appauth = { group = "net.openid", name = "appauth", version.ref = "appauth" }
+net-freeutils-jcharset = { group = "net.freeutils", name = "jcharset", version.ref = "jcharset" }
+org-apache-poi-scratchpad = { group = "org.apache.poi", name = "poi-scratchpad", version.ref = "apachePoi" }
+org-simplejavamail-outlook-message-parser = { group = "org.simplejavamail", name = "outlook-message-parser", version.ref = "outlookParser" }
+org-reactivestreams = { group = "org.reactivestreams", name = "reactive-streams", version.ref = "reactivestreams" }
+io-reactivex-rxjava = { group = "io.reactivex.rxjava3", name = "rxjava", version.ref = "rxjava" }
+com-caverock-androidsvg = { group = "com.caverock", name = "androidsvg", version.ref = "androidsvg" }
+org-apache-commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
+com-github-seancfoley-ipaddress = { group = "com.github.seancfoley", name = "ipaddress", version.ref = "ipaddress" }
+com-squareup-leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
+com-neovisionaries-nv-websocket-client = { group = "com.neovisionaries", name = "nv-websocket-client", version.ref = "websocket" }
+org-tinylog-api = { group = "org.tinylog", name = "tinylog-api", version.ref = "tinylog" }
+org-tinylog-impl = { group = "org.tinylog", name = "tinylog-impl", version.ref = "tinylog" }
+com-google-zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+com-ezylang-evalex = { group = "com.ezylang", name = "EvalEx", version.ref = "evalex" }
+com-vanniktech-android-image-cropper = { group = "com.vanniktech", name = "android-image-cropper", version.ref = "imageCropper" }
+androidx-heifwriter = { group = "androidx.heifwriter", name = "heifwriter", version.ref = "heifwriter" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+org-json = { group = "org.json", name = "json", version.ref = "json" }
+org-xerial-sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqliteJdbc" }
+org-jetbrains-kotlin-kotlin-metadata-jvm = { group = "org.jetbrains.kotlin", name = "kotlin-metadata-jvm", version.ref = "kotlinMetadata" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+download = { id = "de.undercouch.download", version.ref = "downloadPlugin" }

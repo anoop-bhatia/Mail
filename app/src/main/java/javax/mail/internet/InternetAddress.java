@@ -253,7 +253,7 @@ public class InternetAddress extends Address implements Cloneable {
 	
 	if (encodedPersonal != null) {
 	    try {
-		personal = eu.faircode.email.MessageHelper.decodeMime(encodedPersonal);
+		personal = in.anoopbhatia.mail.MessageHelper.decodeMime(encodedPersonal);
 		return personal;
 	    } catch (Exception ex) {
 		// 1. ParseException: either its an unencoded string or
@@ -761,7 +761,6 @@ public class InternetAddress extends Address implements Cloneable {
      *
      * XXX - Deal with encoded Headers too.
      */
-    @SuppressWarnings("fallthrough")
     private static InternetAddress[] parse(String s, boolean strict,
 				    boolean parseHdr) throws AddressException {
 	int start, end, index, nesting;
@@ -989,104 +988,101 @@ public class InternetAddress extends Address implements Cloneable {
 		break;
 
 	    case ';':
-		if (start == -1) {
-		    route_addr = false;
-		    rfc822 = false;
-		    start = end = -1;
-		    break;	// nope, nothing there
-		}
-		if (in_group) {
-		    in_group = false;
-		    /*
-		     * If parsing headers, but not strictly, peek ahead.
-		     * If next char is "@", treat the group name
-		     * like the local part of the address, e.g.,
-		     * "Undisclosed-Recipient:;@java.sun.com".
-		     */
-		    if (parseHdr && !strict &&
-			    index + 1 < length && s.charAt(index + 1) == '@')
-			break;
-		    ma = new InternetAddress();
-		    end = index + 1;
-		    ma.setAddress(s.substring(start, end).trim());
-		    v.add(ma);
-
-		    route_addr = false;
-		    rfc822 = false;
-		    start = end = -1;
-		    start_personal = end_personal = -1;
-		    break;
-		}
-		if (!ignoreErrors)
-		    throw new AddressException(
-			    "Illegal semicolon, not in group", s, index);
-
-		// otherwise, parsing a header; treat semicolon like comma
-		// fall through to comma case...
-
-	    case ',':	// end of an address, probably
-		if (start == -1) {
-		    route_addr = false;
-		    rfc822 = false;
-		    start = end = -1;
-		    break;	// nope, nothing there
-		}
-		if (in_group) {
-		    route_addr = false;
-		    break;
-		}
-		// got a token, add this to our InternetAddress list
-		if (end == -1)
-		    end = index;
-
-		String addr = s.substring(start, end).trim();
-		String pers = null;
-		if (rfc822 && start_personal >= 0) {
-		    pers = unquote(
-			    s.substring(start_personal, end_personal).trim());
-		    if (pers.trim().length() == 0)
-			pers = null;
-		}
-
+    case ',':	// end of an address, probably
+	if (c == ';') {
+	    if (start == -1) {
+		route_addr = false;
+		rfc822 = false;
+		start = end = -1;
+		break;	// nope, nothing there
+	    }
+	    if (in_group) {
+		in_group = false;
 		/*
-		 * If the personal name field has an "@" and the address
-		 * field does not, assume they were reversed, e.g.,
-		 * ``"joe doe" (john.doe@example.com)''.
+		 * If parsing headers, but not strictly, peek ahead.
+		 * If next char is "@", treat the group name
+		 * like the local part of the address, e.g.,
+		 * "Undisclosed-Recipient:;@java.sun.com".
 		 */
-		if (parseHdr && !strict && pers != null &&
-			pers.indexOf('@') >= 0 &&
-			addr.indexOf('@') < 0 && addr.indexOf('!') < 0) {
-		    String tmp = addr;
-		    addr = pers;
-		    pers = tmp;
-		}
-		if (rfc822 || strict || parseHdr) {
-		    if (!ignoreErrors)
-			checkAddress(addr, route_addr, false);
-		    ma = new InternetAddress();
-		    ma.setAddress(addr);
-		    if (pers != null)
-			ma.encodedPersonal = pers;
-		    v.add(ma);
-		} else {
-		    // maybe we passed over more than one space-separated addr
-		    StringTokenizer st = new StringTokenizer(addr);
-		    while (st.hasMoreTokens()) {
-			String a = st.nextToken();
-			checkAddress(a, false, false);
-			ma = new InternetAddress();
-			ma.setAddress(a);
-			v.add(ma);
-		    }
-		}
+		if (parseHdr && !strict &&
+			index + 1 < length && s.charAt(index + 1) == '@')
+		    break;
+		ma = new InternetAddress();
+		end = index + 1;
+		ma.setAddress(s.substring(start, end).trim());
+		v.add(ma);
 
 		route_addr = false;
 		rfc822 = false;
 		start = end = -1;
 		start_personal = end_personal = -1;
 		break;
+	    }
+	    if (!ignoreErrors)
+		throw new AddressException(
+			"Illegal semicolon, not in group", s, index);
+	}
+	if (start == -1) {
+	    route_addr = false;
+	    rfc822 = false;
+	    start = end = -1;
+	    break;	// nope, nothing there
+	}
+	if (in_group) {
+	    route_addr = false;
+	    break;
+	}
+	// got a token, add this to our InternetAddress list
+	if (end == -1)
+	    end = index;
 
-	    case ':':
+	String addr = s.substring(start, end).trim();
+	String pers = null;
+	if (rfc822 && start_personal >= 0) {
+	    pers = unquote(
+		    s.substring(start_personal, end_personal).trim());
+	    if (pers.trim().length() == 0)
+		pers = null;
+	}
+
+	/*
+	 * If the personal name field has an "@" and the address
+	 * field does not, assume they were reversed, e.g.,
+	 * ``"joe doe" (john.doe@example.com)''.
+	 */
+	if (parseHdr && !strict && pers != null &&
+		pers.indexOf('@') >= 0 &&
+		addr.indexOf('@') < 0 && addr.indexOf('!') < 0) {
+	    String tmp = addr;
+	    addr = pers;
+	    pers = tmp;
+	}
+	if (rfc822 || strict || parseHdr) {
+	    if (!ignoreErrors)
+		checkAddress(addr, route_addr, false);
+	    ma = new InternetAddress();
+	    ma.setAddress(addr);
+	    if (pers != null)
+		ma.encodedPersonal = pers;
+	    v.add(ma);
+	} else {
+	    // maybe we passed over more than one space-separated addr
+	    StringTokenizer st = new StringTokenizer(addr);
+	    while (st.hasMoreTokens()) {
+		String a = st.nextToken();
+		checkAddress(a, false, false);
+		ma = new InternetAddress();
+		ma.setAddress(a);
+		v.add(ma);
+	    }
+	}
+
+	route_addr = false;
+	rfc822 = false;
+	start = end = -1;
+	start_personal = end_personal = -1;
+	break;
+    case ':':
 		rfc822 = true;
 		if (in_group)
 		    if (!ignoreErrors)

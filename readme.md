@@ -1,95 +1,103 @@
-# FairEmail Native REST API Project
+# Mail by Anoop Bhatia
 
-This repository contains source-code changes that add native REST-based mail-provider integrations to FairEmail. It is intended for users who want to inspect the code, build it themselves, or adapt it for their own use. It is **not an official FairEmail release**, and this project does not separately distribute a FairEmail app or prebuilt app package.
+An independent Android email client fork based on [FairEmail](https://github.com/M66B/FairEmail), with native REST API integrations for Gmail, Zoho Mail, and Microsoft Graph.
 
-The upstream project's original root README is preserved as [`readme_fairemail.md`](readme_fairemail.md).
+This repository is for inspecting, building, and adapting the source. It is not an official FairEmail release, and prebuilt APKs are not committed here.
 
-## Implemented functionality
+For upstream context, see the preserved [FairEmail README](assets/fairemail_readme.md) and [attribution](assets/fairemail_attribution.md).
 
-- **Gmail REST API:** Native Gmail mailbox synchronization, including labels and messages; message content and attachment handling; sending; and supported mailbox actions.
-- **Zoho Mail REST API:** Native Zoho Mail synchronization for folders and messages, message content and attachment handling, sending, and supported mailbox actions.
-- **Microsoft Graph REST API:** Native Graph-backed folder and message synchronization, message and attachment handling, and supported message operations, including sending.
-- **Shared mail-client behavior:** Provider-specific account handling is integrated with FairEmail's existing account, folder, message, and background-operation infrastructure.
-- **Existing transports retained:** Existing IMAP and POP account paths remain available, including Gmail-hosted IMAP for accounts configured to use IMAP. The native Gmail REST path is additional; it does not replace those existing paths.
+## Features
 
-Exact capabilities and behavior depend on the provider and the operation supported by its API. The source tree also includes tests for provider-specific and shared functionality.
+- **Gmail REST API:** Synchronize messages and labels, read message content and attachments, send mail, and perform supported mailbox actions.
+- **Zoho Mail REST API:** Synchronize folders and messages, read content and attachments, send mail, and perform supported mailbox actions.
+- **Microsoft Graph REST API:** Synchronize folders and messages, handle message content and attachments, send mail, and perform supported message operations.
+- **Existing mail transports:** IMAP and POP account paths remain available, with SMTP sending where supported. Native Gmail REST is an additional option and does not replace Gmail IMAP.
+- **Shared mail-client behavior:** Provider integrations use the app’s existing account, folder, message, and background-operation infrastructure.
 
-## OAuth setup and credential ownership
+Capabilities vary by provider and operation. Native API synchronization uses polling; webhooks are not implemented. Initial sync fetches up to 10 messages per sync-enabled folder, and Fetch more loads 10 older messages per request.
 
-These integrations use provider OAuth rather than asking for a mailbox password for REST access. For a personal build or adaptation, create and manage OAuth registrations in accounts and developer consoles that you control. Existing client IDs in source identify a public OAuth application; a client ID is not a password. Never commit access or refresh tokens, client secrets, signing keys, or private keystores.
+## What differs from upstream
 
-Native Android applications are public clients and cannot keep a confidential client secret safe if it is bundled in the APK. Match each provider registration to the application ID, redirect/callback URI, account type, and signing certificate used by the build you are actually running.
+This fork removes or simplifies some inherited distribution and app features, including billing and store-specific build variants, the in-app update checker, some announcement/onboarding/report/rating links or menus, and some generic OAuth choices. Some language resources, tutorials, and inherited documentation or privacy-page content were also removed. This is a summary of changes recorded in this repository’s history, not a complete comparison with every upstream release.
 
-### Gmail
+## Modernization highlights
 
-1. In a Google Cloud project you control, enable the Gmail API and configure the OAuth consent screen and intended audience/test users.
-2. The native Gmail flow uses Google Identity Services in [`GmailAuthorizationGms.java`](app/src/gms/java/eu/faircode/email/GmailAuthorizationGms.java). Its requested grants are defined in [`GmailScopes.java`](app/src/main/java/eu/faircode/email/GmailScopes.java): `gmail.readonly`, `gmail.modify`, `gmail.send`, and `https://mail.google.com/`.
-3. Google classifies `https://mail.google.com/` as a **restricted** scope. This project uses it for operations that permanently delete Gmail messages without first moving them to Trash. Public distribution using restricted Gmail data may require Google's verification and other policy steps; review the current requirements before distributing a build.
-4. Google Android authorization can depend on the app's package name and signing-certificate SHA-1. Check the signing report for the exact build variant with `./gradlew :app:signingReport`. If the debug keystore is renewed or replaced, update the relevant Google registration with the new fingerprint.
-5. The browser-based authorization alternative is implemented in [`GmailWebOAuth.java`](app/src/main/java/eu/faircode/email/GmailWebOAuth.java) and wired from [`FragmentGmailApi.java`](app/src/main/java/eu/faircode/email/FragmentGmailApi.java). Review its public client and redirect configuration against Google's current supported flow when adapting the project. Do not add a confidential client secret to the app.
+- JDK 25, Gradle 9.7.1, Android Gradle Plugin 9.4.1, Kotlin 2.4.21, Android SDK 37, NDK `30.0.16248370`, and CMake 4.4.4. Minimum Android version remains API 28.
+- Lifecycle Extensions was replaced by individual Lifecycle modules (2.11.0); the project uses RxJava 3.1.12, Paging 3.5.3, and Room 2.8.5.
+- CLD3’s native dependency stack uses Protobuf 36.2, C++ runtime 7.36.2, and Abseil 20250512.1, with regenerated vendor code.
+- Deprecation diagnostics remain visible; warnings are not suppressed.
 
-Official guidance: [Gmail API scopes and verification](https://developers.google.com/workspace/gmail/api/auth/scopes), [Google OAuth consent configuration](https://developers.google.com/workspace/guides/configure-oauth-consent), [OAuth for installed apps](https://developers.google.com/identity/protocols/oauth2/native-app), and [Android signing-certificate fingerprints](https://developers.google.com/android/guides/client-auth).
-
-### Microsoft Graph
-
-1. Register an app in the [Microsoft Entra admin center](https://entra.microsoft.com/) and choose supported account types that match the authority used by the FairEmail OAuth profile.
-2. The native Graph client ID, redirect URI, and authority are defined in [`GraphOAuth.java`](app/src/main/java/eu/faircode/email/GraphOAuth.java). For your own registration, configure the Android platform and exact package/signature-hash redirect for the build you use, then update the matching source configuration. The current native profile uses the `consumers` authority; adapt the authority and registration if you need a different Microsoft account audience, such as work or school accounts.
-3. The Graph OAuth profile includes `Mail.Send` and `offline_access`; [`FragmentOAuth.java`](app/src/main/java/eu/faircode/email/FragmentOAuth.java) adds delegated `Mail.ReadWrite` for the REST flow. Microsoft documents that `Mail.ReadWrite` does not itself grant send permission, so `Mail.Send` is separate. Tenant policies may require user or administrator consent.
-4. Do not put a confidential client secret in this Android client. Treat OAuth tokens as private user credentials.
-
-Official guidance: [Register an app](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app), [configure an Android redirect](https://learn.microsoft.com/en-us/entra/identity-platform/tutorial-mobile-app-android-prepare-app), [supported account types](https://learn.microsoft.com/en-us/entra/identity-platform/v2-supported-account-types), and [Microsoft Graph permissions](https://learn.microsoft.com/en-us/graph/permissions-reference).
-
-### Zoho Mail
-
-1. Register an application in the [Zoho API Console](https://api-console.zoho.com/). Use the callback URI shown by the FairEmail account setup flow and register it exactly. This source defaults to `eu.faircode.email://oauth2redirect`; the app validates the callback scheme for the build.
-2. The Zoho setup flow requests a client ID, client secret, and redirect URI. The current implementation uses authorization code with PKCE, but it also requires the client secret during code exchange and refresh. Zoho notes that native/mobile clients are public clients and cannot keep a client secret confidential; do not commit or publish account credentials, and review this design before distributing a wider build.
-3. Requested Mail API permissions are defined in [`ZohoOAuth.java`](app/src/main/java/eu/faircode/email/ZohoOAuth.java): account, folder, and message read; message create, update, and delete; and folder update. The authorization response supplies regional API information. The build defaults to `https://accounts.zoho.com`; source builds can override `zohoAuthorizationServer` locally for another supported Zoho data center.
-
-Official guidance: [Register an OAuth app](https://www.zoho.com/developer/oauth/register-app.html), [mobile/desktop OAuth and PKCE](https://www.zoho.com/developer/oauth/mobile-and-desktop-apps/overview.html), and [Zoho Mail OAuth](https://www.zoho.com/mail/help/api/using-oauth-2.html).
+See [`MODERNIZATION.md`](MODERNIZATION.md) for the full status and remaining limitations.
 
 ## Source map
 
-The provider implementations are under `app/src/main/java/eu/faircode/email/`:
+The Android package is `in.anoopbhatia.mail`; app source is under `app/src/main/java/in/anoopbhatia/mail/`.
 
-- **Gmail:** [`GmailApi.java`](app/src/main/java/eu/faircode/email/GmailApi.java), [`GmailReceiver.java`](app/src/main/java/eu/faircode/email/GmailReceiver.java), [`GmailMailMutator.java`](app/src/main/java/eu/faircode/email/GmailMailMutator.java), and the authorization files linked above.
-- **Microsoft Graph:** [`GraphMailApi.java`](app/src/main/java/eu/faircode/email/GraphMailApi.java), [`GraphMailReceiver.java`](app/src/main/java/eu/faircode/email/GraphMailReceiver.java), [`GraphMailMutator.java`](app/src/main/java/eu/faircode/email/GraphMailMutator.java), and [`GraphOAuth.java`](app/src/main/java/eu/faircode/email/GraphOAuth.java).
-- **Zoho Mail:** [`ZohoApi.java`](app/src/main/java/eu/faircode/email/ZohoApi.java), [`ZohoReceiver.java`](app/src/main/java/eu/faircode/email/ZohoReceiver.java), [`ZohoMailMutator.java`](app/src/main/java/eu/faircode/email/ZohoMailMutator.java), and [`ZohoOAuth.java`](app/src/main/java/eu/faircode/email/ZohoOAuth.java).
-- **Shared account/OAuth setup:** [`EmailProvider.java`](app/src/main/java/eu/faircode/email/EmailProvider.java), [`FragmentOAuth.java`](app/src/main/java/eu/faircode/email/FragmentOAuth.java), and [`app/build.gradle`](app/build.gradle).
-- **Regression tests:** `app/src/test/java/eu/faircode/email/`.
+- Gmail: `GmailApi.java`, `GmailReceiver.java`, `GmailMailMutator.java`
+- Microsoft Graph: `GraphMailApi.java`, `GraphMailReceiver.java`, `GraphMailMutator.java`
+- Zoho Mail: `ZohoApi.java`, `ZohoReceiver.java`, `ZohoMailMutator.java`
+- Shared API credentials: `ApiCredentials.java`
+- Provider and OAuth callback definitions: `app/src/main/res/xml/providers.xml`
 
-## Synchronization and privacy
+Release application ID: `in.anoopbhatia.mail`
 
-- Initial synchronization fetches up to **10 messages per folder with synchronization enabled**.
-- **Fetch more** loads **10 older messages per request**.
-- API updates rely entirely on polling. **No webhooks are implemented**, for privacy reasons.
+Debug application ID: `in.anoopbhatia.mail.debug`
+
+## Configure OAuth for your own build
+
+Create your own provider OAuth registrations. In `app/src/main/res/xml/providers.xml`, edit the `<api>` entries identified by `key="gmail"`, `key="graph"`, and `key="zoho"` (currently around lines 4, 13, and 19; line numbers may change):
+
+- **Gmail, line 4:** `clientId`, `debugClientId`, `redirectUri`, and `debugRedirectUri`.
+- **Microsoft Graph, line 13:** `clientId`, `redirectUri`, and `debugRedirectUri`.
+- **Zoho, line 19:** `clientId`, `clientSecret`, and `redirectUri`.
+
+If you also use Gmail or Microsoft OAuth over IMAP, update the matching provider-level `<oauth>` entry in that same XML. Make each callback match the package ID and build variant you use. The optional Zoho `zohoAuthorizationServer` can be set as a Gradle property or in the root `local.properties` file.
+
+Use your own registrations; don’t commit private credentials. OAuth values included in an Android app can be extracted from its APK, so an embedded client secret cannot be treated as confidential.
 
 ## Build a local debug APK
 
-Install Android Studio with the Android SDK and a JDK supported by this repository's Gradle wrapper. From the repository root, use the included wrapper:
+Install JDK 25, Android SDK Platform 37, NDK `30.0.16248370`, and CMake 4.4.4. Set `sdk.dir` in the untracked root `local.properties` to your Android SDK path, then run from the repository root:
 
 ```bash
-./gradlew :app:assembleGithubDebug
+./gradlew :app:assembleDebug
 ```
 
-The APK is produced under `app/build/outputs/apk/github/debug/`. To run the local unit tests:
+The APK is generated under `app/build/outputs/apk/debug/`. Run the unit tests with:
 
 ```bash
-./gradlew :app:testGithubDebugUnitTest
+./gradlew :app:testDebugUnitTest
 ```
 
-To inspect signing information for OAuth registration, including the debug certificate fingerprint, run:
+Available build types are Debug, Release, and Large. Large uses the Release configuration with a larger heap. Debug has the `.debug` application ID and Debug OAuth callbacks.
 
-```bash
-./gradlew :app:signingReport
+### Optional signing
+
+For local signing, set these Gradle properties in your user-level `~/.gradle/gradle.properties` and keep the keystore and file out of Git:
+
+```properties
+storeFilePath=/path/to/your/keystore.p12
+keyAlias=YOUR_KEY_ALIAS
+storePassword=YOUR_KEYSTORE_PASSWORD
 ```
 
-On Windows, use `gradlew.bat` in place of `./gradlew`. The debug application ID has the `.debug` suffix, so provider package/redirect registrations must match the variant you build.
+The current build uses `storePassword` for both the keystore and key password. Without the signing properties, the APK may be unsigned.
 
-## Project scope and caveats
+For GitHub Actions signing, add these repository secrets under Settings → Secrets and variables → Actions:
 
-This is a **code-only source project** for inspection, source builds, and user adaptation. It is not presented as an official FairEmail release, and no separate app distribution is provided here. OAuth consent, provider verification, account eligibility, tenant policy, and API limits remain subject to the provider. Available operations differ across services; consult the provider documentation and corresponding code/tests rather than assuming that every provider has identical behavior.
+- `KEYSTORE_BASE64` — your keystore encoded as Base64.
+- `KEY_ALIAS` — your signing key alias.
+- `KEYSTORE_PASSWORD` — the keystore password, also used as the key password by the current build.
 
-Use and modification remain subject to the applicable project and upstream licenses. See [`LICENSE`](LICENSE).
+Use only a signing key you own. Never commit the keystore or passwords.
+
+## License
+
+This project is licensed under the GNU General Public License v3. See [`LICENSE`](LICENSE). FairEmail-derived code and third-party components are credited in the app’s [attribution file](app/src/main/assets/ATTRIBUTION.md); third-party components remain subject to their own licenses.
+
+## Credits
 
 - **Author:** [Anoop Bhatia](https://github.com/anoopspeaks)
-- <strong>Tool used:</strong> <img src="assets/kern-badge.jpg" width="48" height="48" alt="Kern badge" align="middle"> <a href="https://cue.im/">Cue by Manus</a>
+- **Tools used:**
+  - <a href="https://cue.im/"><img src="assets/kern-badge.jpg" width="36" height="36" alt="Kern badge" align="middle">&nbsp;Cue by Manus</a>
+  - <a href="https://freebuff.com/"><img src="assets/freebuff.jpg" width="24" height="24" alt="Freebuff" align="middle">&nbsp;Freebuff</a>

@@ -70,7 +70,7 @@ public class text_plain extends handler_base {
 	     */
 		try {
 			is = new InputStreamReader(ds.getInputStream(),
-					eu.faircode.email.UnknownCharsetProvider.charsetForMime(getCharset(ds.getContentType())));
+					in.anoopbhatia.mail.UnknownCharsetProvider.charsetForMime(getCharset(ds.getContentType())));
 		} catch (IllegalArgumentException ex) {
 			throw new UnsupportedEncodingException(enc);
 		}
@@ -132,7 +132,7 @@ public class text_plain extends handler_base {
 	     */
 		try {
 			osw = new OutputStreamWriter(new NoCloseOutputStream(os),
-					eu.faircode.email.UnknownCharsetProvider.charsetForMime(getCharset(type)));
+					in.anoopbhatia.mail.UnknownCharsetProvider.charsetForMime(getCharset(type)));
 		} catch (IllegalArgumentException ex) {
 			throw new UnsupportedEncodingException(enc);
 		}

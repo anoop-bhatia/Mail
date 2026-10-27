@@ -108,7 +108,7 @@
         app:srcCompat="@drawable/twotone_save_alt_24"
         app:tint="?attr/colorAccent" />
 
-    <eu.faircode.email.ContentLoadingProgressBar
+    <in.anoopbhatia.mail.ContentLoadingProgressBar
         android:id="@+id/pbWait"
         style="@style/Base.Widget.AppCompat.ProgressBar"
         android:layout_width="wrap_content"

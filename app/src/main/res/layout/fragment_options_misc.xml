@@ -381,7 +381,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swHapticFeedbackSwipe" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spLanguage"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -403,127 +403,6 @@
                     app:layout_constraintTop_toBottomOf="@id/spLanguage" />
 
                 <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/swUpdates"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:checked="true"
-                    android:drawableStart="@drawable/twotone_get_app_24"
-                    android:drawablePadding="6dp"
-                    android:text="@string/title_advanced_updates"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/tvLanguageHint"
-                    app:switchPadding="12dp" />
-
-                <TextView
-                    android:id="@+id/tvGithubPrivacy"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginTop="12dp"
-                    android:drawableEnd="@drawable/twotone_open_in_new_12"
-                    android:drawablePadding="6dp"
-                    android:text="@string/title_privacy_policy"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                    android:textColor="?android:attr/textColorLink"
-                    app:drawableTint="?android:attr/textColorLink"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/swUpdates" />
-
-                <ImageButton
-                    android:id="@+id/ibChannelUpdated"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginTop="12dp"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@+id/tvGithubPrivacy"
-                    app:srcCompat="@drawable/switch_off_on" />
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/swWeekly"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginTop="12dp"
-                    android:text="@string/title_advanced_check_weekly"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/ibChannelUpdated"
-                    app:switchPadding="12dp" />
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/swBeta"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginTop="12dp"
-                    android:text="@string/title_advanced_beta"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/swWeekly"
-                    app:switchPadding="12dp" />
-
-                <TextView
-                    android:id="@+id/tvBitBucketPrivacy"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="24dp"
-                    android:layout_marginTop="12dp"
-                    android:drawableEnd="@drawable/twotone_open_in_new_12"
-                    android:drawablePadding="6dp"
-                    android:text="@string/title_privacy_policy"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                    android:textColor="?android:attr/textColorLink"
-                    app:drawableTint="?android:attr/textColorLink"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/swBeta" />
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/swChangelog"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:drawableStart="@drawable/twotone_list_alt_24"
-                    android:drawablePadding="6dp"
-                    android:text="@string/title_advanced_changelog"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/tvBitBucketPrivacy"
-                    app:switchPadding="12dp" />
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/swAnnouncements"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:checked="true"
-                    android:drawableStart="@drawable/baseline_campaign_white_24"
-                    android:drawablePadding="6dp"
-                    android:text="@string/title_advanced_announcements"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/swChangelog"
-                    app:switchPadding="12dp" />
-
-                <TextView
-                    android:id="@+id/tvAnnouncementsPrivacy"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginTop="12dp"
-                    android:drawableEnd="@drawable/twotone_open_in_new_12"
-                    android:drawablePadding="6dp"
-                    android:text="@string/title_privacy_policy"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                    android:textColor="?android:attr/textColorLink"
-                    app:drawableTint="?android:attr/textColorLink"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/swAnnouncements" />
-
-                <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/swCrashReports"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -534,7 +413,7 @@
                     android:text="@string/title_advanced_crash_reports"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/tvAnnouncementsPrivacy"
+                    app:layout_constraintTop_toBottomOf="@id/tvLanguageHint"
                     app:switchPadding="12dp" />
 
                 <TextView
@@ -676,23 +555,6 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swGoogleBackup" />
 
-                <androidx.constraintlayout.widget.Group
-                    android:id="@+id/grpUpdates"
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    app:constraint_referenced_ids="swUpdates,tvGithubPrivacy,swWeekly" />
-
-                <androidx.constraintlayout.widget.Group
-                    android:id="@+id/grpBitbucket"
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    app:constraint_referenced_ids="swBeta,tvBitBucketPrivacy" />
-
-                <androidx.constraintlayout.widget.Group
-                    android:id="@+id/grpAnnouncements"
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    app:constraint_referenced_ids="swAnnouncements,tvAnnouncementsPrivacy" />
             </androidx.constraintlayout.widget.ConstraintLayout>
         </androidx.cardview.widget.CardView>
 
@@ -2365,16 +2227,6 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/etKeywords" />
 
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/swTestIab"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="@string/title_advanced_test_iab"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/tvKeywordsHint"
-                    app:switchPadding="12dp" />
 
                 <Button
                     android:id="@+id/btnImportProviders"
@@ -2384,7 +2236,7 @@
                     android:layout_marginTop="12dp"
                     android:text="@string/title_advanced_import_providers"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/swTestIab" />
+                    app:layout_constraintTop_toBottomOf="@id/tvKeywordsHint" />
 
                 <Button
                     android:id="@+id/btnExportClassifier"

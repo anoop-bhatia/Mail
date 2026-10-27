@@ -1,9 +1,9 @@
-<eu.faircode.email.DrawerLayoutEx xmlns:android="http://schemas.android.com/apk/res/android"
+<in.anoopbhatia.mail.DrawerLayoutEx xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="eu.faircode.email.ActivityView">
+    tools:context="in.anoopbhatia.mail.ActivityView">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -45,4 +45,4 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
     </androidx.core.widget.NestedScrollView>
-</eu.faircode.email.DrawerLayoutEx>
+</in.anoopbhatia.mail.DrawerLayoutEx>

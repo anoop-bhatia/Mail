@@ -563,7 +563,6 @@ public class CollectorFormatter extends Formatter {
      * @throws UndeclaredThrowableException if the comparator can not be
      * created.
      */
-    @SuppressWarnings("unchecked")
     private Comparator<? super LogRecord> initComparator(final String p) {
         Comparator<? super LogRecord> c;
         final String name = fromLogManager(p.concat(".comparator"));
@@ -589,8 +588,8 @@ public class CollectorFormatter extends Formatter {
                     throw new IllegalArgumentException(
                             "No comparator to reverse.");
                 } else {
-                    //Don't force the byte code verifier to load the comparator.
-                    c = Comparator.class.cast(SeverityComparator.getInstance());
+                    //Direct method invocation resolves the concrete comparator type.
+                    c = SeverityComparator.getInstance();
                 }
             }
         } catch (final RuntimeException re) {

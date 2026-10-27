@@ -97,9 +97,9 @@ final class GestureRouter<T extends OnGestureListener & OnDoubleTapListener>
         try {
             mDelegates.get(e).onLongPress(e);
         } catch (Throwable ex) {
-            eu.faircode.email.Log.w(ex);
+            in.anoopbhatia.mail.Log.w(ex);
             /*
-                java.lang.IllegalStateException: Cannot call this method while RecyclerView is computing a layout or scrolling eu.faircode.email.FixedRecyclerView{239c688b VFED.... ........ 0,0-800,1162 #7f0a04da app:id/rvMessage}, adapter:eu.faircode.email.AdapterMessage@209415c5, layout:eu.faircode.email.FragmentMessages$7@190d7b1a, context:eu.faircode.email.ActivityView@3e8522fb
+                java.lang.IllegalStateException: Cannot call this method while RecyclerView is computing a layout or scrolling in.anoopbhatia.mail.FixedRecyclerView{239c688b VFED.... ........ 0,0-800,1162 #7f0a04da app:id/rvMessage}, adapter:in.anoopbhatia.mail.AdapterMessage@209415c5, layout:in.anoopbhatia.mail.FragmentMessages$7@190d7b1a, context:in.anoopbhatia.mail.ActivityView@3e8522fb
                         at androidx.recyclerview.widget.RecyclerView.assertNotInLayoutOrScroll(SourceFile:3)
                         at androidx.recyclerview.widget.RecyclerView$RecyclerViewDataObserver.onItemRangeChanged(SourceFile:1)
                         at androidx.recyclerview.widget.RecyclerView$AdapterDataObservable.notifyItemRangeChanged(SourceFile:3)

@@ -5,7 +5,8 @@ import android.content.DialogInterface;
 import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
-import android.preference.Preference;
+import androidx.preference.Preference;
+import androidx.preference.PreferenceViewHolder;
 import androidx.annotation.NonNull;
 import android.util.AttributeSet;
 import android.view.View;
@@ -81,8 +82,9 @@ public class ColorPickerPreference extends Preference {
 
 
 	@Override
-	protected void onBindView(@NonNull View view) {
-		super.onBindView(view);
+	public void onBindViewHolder(@NonNull PreferenceViewHolder holder) {
+		super.onBindViewHolder(holder);
+		View view = holder.itemView;
 
 		int tmpColor = isEnabled()
 				? selectedColor
@@ -110,8 +112,8 @@ public class ColorPickerPreference extends Preference {
 	}
 
 	@Override
-	protected void onSetInitialValue(boolean restoreValue, Object defaultValue) {
-		setValue(restoreValue ? getPersistedInt(0) : (Integer) defaultValue);
+	protected void onSetInitialValue(Object defaultValue) {
+		setValue(getPersistedInt((Integer) defaultValue));
 	}
 
 	@Override

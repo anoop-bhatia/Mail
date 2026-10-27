@@ -25,7 +25,7 @@ import androidx.annotation.AnyThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.RestrictTo;
 import androidx.annotation.VisibleForTesting;
-import androidx.core.os.TraceCompat;
+import android.os.Trace;
 import androidx.core.util.Preconditions;
 import androidx.emoji2.text.flatbuffer.MetadataList;
 
@@ -91,10 +91,10 @@ public final class MetadataRepo {
     @VisibleForTesting
     public static MetadataRepo create(@NonNull final Typeface typeface) {
         try {
-            TraceCompat.beginSection(S_TRACE_CREATE_REPO);
+            Trace.beginSection(S_TRACE_CREATE_REPO);
             return new MetadataRepo(typeface, new MetadataList());
         } finally {
-            TraceCompat.endSection();
+            Trace.endSection();
         }
     }
 
@@ -109,10 +109,10 @@ public final class MetadataRepo {
     public static MetadataRepo create(@NonNull final Typeface typeface,
             @NonNull final InputStream inputStream) throws IOException {
         try {
-            TraceCompat.beginSection(S_TRACE_CREATE_REPO);
+            Trace.beginSection(S_TRACE_CREATE_REPO);
             return new MetadataRepo(typeface, MetadataListReader.read(inputStream));
         } finally {
-            TraceCompat.endSection();
+            Trace.endSection();
         }
     }
 
@@ -127,10 +127,10 @@ public final class MetadataRepo {
     public static MetadataRepo create(@NonNull final Typeface typeface,
             @NonNull final ByteBuffer byteBuffer) throws IOException {
         try {
-            TraceCompat.beginSection(S_TRACE_CREATE_REPO);
+            Trace.beginSection(S_TRACE_CREATE_REPO);
             return new MetadataRepo(typeface, MetadataListReader.read(byteBuffer));
         } finally {
-            TraceCompat.endSection();
+            Trace.endSection();
         }
     }
 
@@ -145,12 +145,12 @@ public final class MetadataRepo {
     public static MetadataRepo create(@NonNull final AssetManager assetManager,
             @NonNull final String assetPath) throws IOException {
         try {
-            TraceCompat.beginSection(S_TRACE_CREATE_REPO);
+            Trace.beginSection(S_TRACE_CREATE_REPO);
             final Typeface typeface = Typeface.createFromAsset(assetManager, assetPath);
             return new MetadataRepo(typeface,
                     MetadataListReader.read(assetManager, assetPath));
         } finally {
-            TraceCompat.endSection();
+            Trace.endSection();
         }
     }
 

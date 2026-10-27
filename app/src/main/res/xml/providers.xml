@@ -1,11 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <providers>
+    <apiCredentials>
+        <api key="gmail" providerId="gmailapi" clientId="DUMMY_GOOGLE_RELEASE_CLIENT_ID" debugClientId="DUMMY_GOOGLE_DEBUG_CLIENT_ID" redirectUri="dummy:/oauth/release/callback" debugRedirectUri="dummy:/oauth/debug/callback" authorizationEndpoint="https://accounts.google.com/o/oauth2/auth" tokenEndpoint="https://oauth2.googleapis.com/token" privacy="https://policies.google.com/privacy" prompt="consent">
+            <scopes>
+                <scope>https://www.googleapis.com/auth/gmail.readonly</scope>
+                <scope>https://www.googleapis.com/auth/gmail.modify</scope>
+                <scope>https://www.googleapis.com/auth/gmail.send</scope>
+                <scope>https://mail.google.com/</scope>
+            </scopes>
+            <parameter key="access_type" value="offline" />
+        </api>
+        <api key="graph" providerId="msgraphapi" legacyProviderId="outlookgraph" clientId="DUMMY_MICROSOFT_CLIENT_ID" redirectUri="msauth://example.invalid/DUMMY_RELEASE_SIGNATURE" debugRedirectUri="msauth://example.invalid/DUMMY_DEBUG_SIGNATURE" authorizationEndpoint="https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize" tokenEndpoint="https://login.microsoftonline.com/consumers/oauth2/v2.0/token" privacy="https://privacy.microsoft.com/privacystatement" prompt="login" additionalScopes="openid,profile,email,https://graph.microsoft.com/Mail.ReadWrite">
+            <scopes>
+                <scope>offline_access</scope>
+                <scope>https://graph.microsoft.com/Mail.Send</scope>
+            </scopes>
+        </api>
+        <api key="zoho" providerId="zohomailapi" legacyProviderId="zoho-mail-api" clientId="DUMMY_ZOHO_CLIENT_ID" clientSecret="DUMMY_ZOHO_CLIENT_SECRET" redirectUri="in.anoopbhatia.mail://oauth2redirect" authorizationEndpoint="https://accounts.zoho.com/oauth/v2/auth" tokenEndpoint="https://accounts.zoho.com/oauth/v2/token" privacy="https://www.zoho.com/privacy.html" authorizationServer="https://accounts.zoho.com" prompt="consent">
+            <scopes>
+                <scope>ZohoMail.accounts.READ</scope>
+                <scope>ZohoMail.folders.ALL</scope>
+                <scope>ZohoMail.folders.READ</scope>
+                <scope>ZohoMail.folders.UPDATE</scope>
+                <scope>ZohoMail.messages.READ</scope>
+                <scope>ZohoMail.messages.CREATE</scope>
+                <scope>ZohoMail.messages.UPDATE</scope>
+                <scope>ZohoMail.messages.DELETE</scope>
+            </scopes>
+            <parameter key="access_type" value="offline" />
+            <accountsServer location="us" uri="https://accounts.zoho.com" />
+            <accountsServer location="eu" uri="https://accounts.zoho.eu" />
+            <accountsServer location="in" uri="https://accounts.zoho.in" />
+            <accountsServer location="au" uri="https://accounts.zoho.com.au" />
+            <accountsServer location="jp" uri="https://accounts.zoho.jp" />
+            <accountsServer location="ca" uri="https://accounts.zohocloud.ca" />
+            <accountsServer location="sa" uri="https://accounts.zoho.sa" />
+            <accountsServer location="uk" uri="https://accounts.zoho.uk" />
+            <accountsServer location="cn" uri="https://accounts.zoho.com.cn" />
+        </api>
+    </apiCredentials>
     <provider
         name="Gmail"
         appPassword="true"
         domain="gmail\\.com"
         id="gmail"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq6"
         order="1"
         type="com.google">
         <imap
@@ -23,11 +61,13 @@
         <oauth
             askAccount="true"
             authorizationEndpoint="https://accounts.google.com/o/oauth2/auth"
-            clientId="803253368361-11ias0ee6bqhvdi4f21fs1lh7fsb0il2.apps.googleusercontent.com"
+            clientId="DUMMY_GOOGLE_RELEASE_CLIENT_ID"
+            debugClientId="DUMMY_GOOGLE_DEBUG_CLIENT_ID"
             enabled="true"
             privacy="https://policies.google.com/privacy"
             prompt="consent"
-            redirectUri="eu.faircode.email:/"
+            redirectUri="dummy:/oauth/release/callback"
+            debugRedirectUri="dummy:/oauth/debug/callback"
             scopes="https://mail.google.com/"
             tokenEndpoint="https://oauth2.googleapis.com/token">
             <!-- https://developers.google.com/identity/protocols/oauth2/native-app -->
@@ -36,9 +76,43 @@
                 key="access_type"
                 value="offline" />
         </oauth>
-        <!-- https://oauth.faircode.eu/.well-known/assetlinks.json -->
+        <!-- https://anoopbhatia.in/.well-known/assetlinks.json -->
         <!-- https://developer.android.com/training/app-links/verify-site-associations -->
         <!-- /opt/android-studio/jre/bin/keytool -keystore ~/.android/debug.keystore -list -v -->
+    </provider>
+    <provider
+        name="Microsoft"
+        description="Microsoft"
+        id="microsoft"
+        maxtls="1.2"
+        order="2"
+        partial="false"
+        useip="false">
+        <imap
+            host="outlook.office365.com"
+            port="993"
+            starttls="false" />
+        <smtp
+            host="smtp.office365.com"
+            port="587"
+            starttls="true" />
+        <pop
+            host="outlook.office365.com"
+            port="995"
+            starttls="false" />
+        <oauth
+            askAccount="true"
+            authorizationEndpoint="https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
+            clientId="DUMMY_MICROSOFT_CLIENT_ID"
+            debugClientId="DUMMY_MICROSOFT_CLIENT_ID"
+            debugRedirectUri="msauth://example.invalid/DUMMY_DEBUG_SIGNATURE"
+            enabled="true"
+            privacy="https://privacy.microsoft.com/privacystatement"
+            prompt="login"
+            redirectUri="msauth://example.invalid/DUMMY_RELEASE_SIGNATURE"
+            scopes="openid,profile,email,offline_access,https://outlook.office.com/IMAP.AccessAsUser.All,https://outlook.office.com/SMTP.Send,https://outlook.office.com/POP.AccessAsUser.All"
+            tokenEndpoint="https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+            tokenScopes="true" />
     </provider>
     <provider
         name="Outlook"
@@ -46,7 +120,6 @@
         documentation.de="&lt;b&gt;Möglicherweise müssen Sie ein &lt;a href=&quot;https://support.microsoft.com/de-de/account-billing/verwenden-von-app-kennw%C3%B6rter-mit-apps-die-keine-zweistufige-%C3%BCberpr%C3%BCfung-unterst%C3%BCtzen-5896ed9b-4263-e681-128a-a6f2979a7944&quot;&gt;App-Passwort&lt;/a&gt; verwenden&lt;/b&gt;."
         documentation.fr="&lt;b&gt;Vous devrez peut-être utiliser &lt;a href=&quot;https://support.microsoft.com/fr-fr/account-billing/utilisation-de-mots-de-passe-d-application-avec-des-applications-qui-ne-prennent-pas-en-charge-la-v%C3%A9rification-en-deux-%C3%A9tapes-5896ed9b-4263-e681-128a-a6f2979a7944&quot;&gt;un mot de passe d\'application&lt;/a&gt;&lt;/b&gt;."
         domain="outlook\\..*"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq14"
         maxtls="1.2"
         noop="true"
         order="2"
@@ -67,7 +140,6 @@
         documentation.de="&lt;b&gt;Möglicherweise müssen Sie ein &lt;a href=&quot;https://support.microsoft.com/de-de/account-billing/verwenden-von-app-kennw%C3%B6rter-mit-apps-die-keine-zweistufige-%C3%BCberpr%C3%BCfung-unterst%C3%BCtzen-5896ed9b-4263-e681-128a-a6f2979a7944&quot;&gt;App-Passwort&lt;/a&gt; verwenden&lt;/b&gt;."
         documentation.fr="&lt;b&gt;Vous devrez peut-être utiliser &lt;a href=&quot;https://support.microsoft.com/fr-fr/account-billing/utilisation-de-mots-de-passe-d-application-avec-des-applications-qui-ne-prennent-pas-en-charge-la-v%C3%A9rification-en-deux-%C3%A9tapes-5896ed9b-4263-e681-128a-a6f2979a7944&quot;&gt;un mot de passe d\'application&lt;/a&gt;&lt;/b&gt;."
         domain="live\\..*"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq14"
         maxtls="1.2"
         order="3"
         partial="false"
@@ -87,7 +159,6 @@
         documentation.de="&lt;b&gt;Möglicherweise müssen Sie ein &lt;a href=&quot;https://support.microsoft.com/de-de/account-billing/verwenden-von-app-kennw%C3%B6rter-mit-apps-die-keine-zweistufige-%C3%BCberpr%C3%BCfung-unterst%C3%BCtzen-5896ed9b-4263-e681-128a-a6f2979a7944&quot;&gt;App-Passwort&lt;/a&gt; verwenden&lt;/b&gt;."
         documentation.fr="&lt;b&gt;Vous devrez peut-être utiliser &lt;a href=&quot;https://support.microsoft.com/fr-fr/account-billing/utilisation-de-mots-de-passe-d-application-avec-des-applications-qui-ne-prennent-pas-en-charge-la-v%C3%A9rification-en-deux-%C3%A9tapes-5896ed9b-4263-e681-128a-a6f2979a7944&quot;&gt;un mot de passe d\'application&lt;/a&gt;&lt;/b&gt;."
         domain="hotmail\\..*"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq14"
         maxtls="1.2"
         order="4"
         partial="false"
@@ -120,7 +191,6 @@
         description="Office 365"
         enabled="false"
         id="office365"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq14"
         maxtls="1.2"
         order="5"
         partial="false"
@@ -138,18 +208,6 @@
             port="995"
             starttls="false" /-->
         <!-- https://outlook.office.com/POP.AccessAsUser.All -->
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-            clientId="3514cf2c-e7a3-45a2-80d4-6a3c3498eca0"
-            clientSecret="r=o4@SlzU:MA6MlXM6mPG[44i4gYPq[@"
-            enabled="true"
-            privacy="https://privacy.microsoft.com/privacystatement"
-            prompt="login"
-            redirectUri="https://oauth.faircode.eu/"
-            scopes="profile,openid,email,offline_access,https://outlook.office.com/IMAP.AccessAsUser.All,https://outlook.office.com/SMTP.Send,https://outlook.office.com/POP.AccessAsUser.All"
-            tokenEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
-            tokenScopes="true" />
         <!-- https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow -->
         <!-- https://docs.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth -->
         <!-- https://learn.microsoft.com/en-us/azure/active-directory/develop/redirect-uris-ios -->
@@ -158,7 +216,6 @@
         name="Outlook"
         description="Outlook/Office 365"
         id="office365pcke"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq14"
         maxtls="1.2"
         order="5"
         partial="false"
@@ -175,21 +232,6 @@
             host="outlook.office365.com"
             port="995"
             starttls="false" />
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-            clientId="3514cf2c-e7a3-45a2-80d4-6a3c3498eca0"
-            enabled="true"
-            privacy="https://privacy.microsoft.com/privacystatement"
-            prompt="login"
-            redirectUri="msauth.eu.faircode.email://auth"
-            scopes="profile,openid,email,offline_access,https://outlook.office.com/IMAP.AccessAsUser.All,https://outlook.office.com/SMTP.Send,https://outlook.office.com/POP.AccessAsUser.All"
-            tokenEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
-            tokenScopes="true">
-            <!--parameter
-                key="domain_hint"
-                value="9188040d-6c67-4c5b-b112-36a304b66dad" /-->
-        </oauth>
         <!-- https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow -->
         <!-- https://docs.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth -->
         <!-- https://learn.microsoft.com/en-us/azure/active-directory/develop/redirect-uris-ios -->
@@ -199,7 +241,6 @@
         alt="true"
         description="Outlook/Hotmail/Live"
         id="outlookgraph"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq14"
         maxtls="1.2"
         order="6"
         partial="false"
@@ -216,29 +257,14 @@
             host="outlook.office365.com"
             port="995"
             starttls="false" />
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-            clientId="3514cf2c-e7a3-45a2-80d4-6a3c3498eca0"
-            enabled="true"
-            privacy="https://privacy.microsoft.com/privacystatement"
-            prompt="login"
-            redirectUri="msauth.eu.faircode.email://auth"
-            scopes="profile,openid,email,offline_access,https://outlook.office.com/IMAP.AccessAsUser.All,https://outlook.office.com/SMTP.Send,https://outlook.office.com/POP.AccessAsUser.All"
-            tokenEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
-            tokenScopes="true">
-            <!--parameter
-                key="domain_hint"
-                value="9188040d-6c67-4c5b-b112-36a304b66dad" /-->
-        </oauth>
         <graph
             askAccount="true"
             authorizationEndpoint="https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
-            clientId="835c3383-543c-4aa2-98ca-c465eb039987"
+            clientId="DUMMY_MICROSOFT_OUTLOOKGRAPH_CLIENT_ID"
             enabled="true"
             privacy="https://privacy.microsoft.com/privacystatement"
             prompt="login"
-            redirectUri="msauth://eu.faircode.email/xSLzBBuLJunOQPB89rtzM54FXx4%3D"
+            redirectUri="msauth://example.invalid/DUMMY_OUTLOOKGRAPH_SIGNATURE"
             scopes="offline_access,https://graph.microsoft.com/Mail.Send"
             tokenEndpoint="https://login.microsoftonline.com/common/oauth2/v2.0/token"
             tokenScopes="true" />
@@ -251,7 +277,6 @@
         alt="true"
         description="Office 365 (alt)"
         id="outlook"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq14"
         maxtls="1.2"
         order="5"
         partial="false"
@@ -268,17 +293,6 @@
             host="outlook.office365.com"
             port="995"
             starttls="false" />
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-            clientId="17e57eca-a59b-4574-ac91-b343004898a6"
-            enabled="true"
-            privacy="https://privacy.microsoft.com/privacystatement"
-            prompt="login"
-            redirectUri="msauth://eu.faircode.email/xSLzBBuLJunOQPB89rtzM54FXx4%3D"
-            scopes="profile,openid,email,offline_access,https://outlook.office.com/IMAP.AccessAsUser.All,https://outlook.office.com/SMTP.Send,https://outlook.office.com/POP.AccessAsUser.All"
-            tokenEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
-            tokenScopes="true" />
     </provider>
     <!-- needs subscription -->
     <provider
@@ -319,7 +333,6 @@
         domain="yahoo\\..*,ymail\\.com"
         enabled="false"
         id="yahoo"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq88"
         noop="true"
         order="8"
         partial="true">
@@ -335,17 +348,6 @@
             host="pop.mail.yahoo.com"
             port="995"
             starttls="false" />
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://api.login.yahoo.com/oauth2/request_auth"
-            clientId="dj0yJmk9SWtNZm1vUFc2THJDJnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PWRi"
-            clientSecret="261a91fbbdb2852c4e80fdd3d1db4a8ebfa4c42b"
-            enabled="true"
-            privacy="https://www.verizonmedia.com/policies/us/en/verizonmedia/privacy/index.html"
-            redirectUri="https://oauth.faircode.eu/"
-            scopes="mail-w"
-            tokenEndpoint="https://api.login.yahoo.com/oauth2/get_token" />
-        <!-- https://developer.yahoo.com/oauth2/guide/ -->
     </provider>
     <provider
         name="Yahoo"
@@ -353,7 +355,6 @@
         description="Yahoo/AT&amp;T"
         domain="yahoo\\..*,ymail\\.com"
         id="yahoo2"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq88"
         noop="true"
         order="8"
         partial="true">
@@ -369,22 +370,11 @@
             host="pop.mail.yahoo.com"
             port="995"
             starttls="false" />
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://api.login.yahoo.com/oauth2/request_auth"
-            clientId="dj0yJmk9RnRORGNuNTlnaXlUJmQ9WVdrOVVrMXViV2RDU1dZbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PTBm"
-            enabled="true"
-            privacy="https://www.verizonmedia.com/policies/us/en/verizonmedia/privacy/index.html"
-            redirectUri="https://oauth.faircode.eu/"
-            scopes="mail-w"
-            tokenEndpoint="https://api.login.yahoo.com/oauth2/get_token" />
-        <!-- https://developer.yahoo.com/oauth2/guide/ -->
     </provider>
     <provider
         name="Sky.com"
         appPassword="true"
-        domain="sky\\.com"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq88">
+        domain="sky\\.com">
         <imap
             host="imap.tools.sky.com"
             port="993"
@@ -414,7 +404,6 @@
         appPassword="true"
         documentation="SMTP est désactivé par défaut, veuillez &lt;a href=&quot;http://jc.etiemble.free.fr/abc/index.php/trucs-astuces/configurer-smtp-free-fr&quot;&gt;voir ici&lt;/a&gt; pour un guide détaillé."
         domain="free\\.fr,libertysurf\\.fr"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq157"
         maxtls="1.2">
         <imap
             host="imap.free.fr"
@@ -460,17 +449,6 @@
             host="pop.fastmail.com"
             port="995"
             starttls="false" />
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://api.fastmail.com/oauth/authorize"
-            clientId="353941ae"
-            enabled="true"
-            privacy="https://www.fastmail.com/features/privacy/"
-            redirectUri="https://oauth.faircode.eu/"
-            scopes="https://www.fastmail.com/dev/protocol-imap,https://www.fastmail.com/dev/protocol-smtp,https://www.fastmail.com/dev/protocol-pop"
-            tokenEndpoint="https://api.fastmail.com/oauth/refresh">
-            <!-- https://www.fastmail.com/dev/#o-auth-at-fastmail -->
-        </oauth>
     </provider>
     <!-- no IMAP IDLE -->
     <provider
@@ -606,23 +584,6 @@
             port="995"
             starttls="false" /-->
         <!-- No OAuth/POP3 support -->
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://oauth.yandex.com/authorize"
-            clientId="a41b1a433d5041c39edebda5b866d2fc"
-            clientSecret="03e6fb9c27374d5b81c612add522f6a0"
-            enabled="true"
-            privacy="https://yandex.com/legal/confidential/"
-            redirectUri="https://oauth.faircode.eu/"
-            scopes="mail:imap_full,mail:smtp"
-            tokenEndpoint="https://oauth.yandex.com/token">
-            <parameter
-                key="device_name"
-                value="Android/FairEmail" />
-            <parameter
-                key="force_confirm"
-                value="true" />
-        </oauth>
         <!-- https://yandex.com/dev/id/doc/dg/imap/index.html -->
     </provider>
     <provider
@@ -747,7 +708,6 @@
         name="Apple iCloud"
         appPassword="true"
         domain="icloud\\.com,me\\.com,mac\\.com"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq148"
         noop="true"
         user="local">
         <imap
@@ -863,21 +823,6 @@
             port="995"
             starttls="false" /-->
         <!-- No OAuth/POP3 support -->
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://oauth.mail.ru/login"
-            clientId="ce54d27dc1574b3a8b50e6789cd1a44a"
-            clientSecret="5f1525783e1d4defb3bc9c2c4b7d0c54"
-            enabled="true"
-            privacy="https://help.mail.ru/legal/terms/common/privacy"
-            redirectUri="https://oauth.faircode.eu/"
-            scopes="userinfo mail.imap"
-            tokenEndpoint="https://oauth.mail.ru/token">
-            <parameter
-                key="prompt_force"
-                value="1" />
-        </oauth>
-        <!-- https://oauth.mail.ru/docs -->
     </provider>
     <provider
         name="KPN mail"
@@ -1057,10 +1002,9 @@
     </provider>
     <provider
         name="AOL"
-        documentation="For AOL you need to use an app password instead of your normal account password, please &lt;a href=&quot;https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq88&quot;&gt;see here&lt;/a&gt;."
+        documentation="For AOL, use an app password instead of your normal account password."
         domain="aol\\..*,compuserve\\.com"
         id="aol"
-        link="https://github.com/M66B/FairEmail/blob/master/FAQ.md#user-content-faq88"
         noop="true"
         partial="true">
         <imap
@@ -1071,15 +1015,6 @@
             host="smtp.aol.com"
             port="465"
             starttls="false" />
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://api.login.aol.com/oauth2/request_auth"
-            clientId="dj0yJmk9SFVJYWVtS21RMjYyJmQ9WVdrOVJVcENRMXBTT1drbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PTJh"
-            enabled="true"
-            privacy="https://legal.yahoo.com/us/en/yahoo/privacy/index.html"
-            redirectUri="https://oauth.faircode.eu/"
-            scopes="mail-w"
-            tokenEndpoint="https://api.login.aol.com/oauth2/get_token" />
     </provider>
     <provider
         name="Verizon"
@@ -1653,7 +1588,7 @@
     <provider
         name="Mail.com"
         appPassword="true"
-        documentation="Using third-party email clients requires a premium mail.com subscription. This is not a limitation of FairEmail. You might need to use an &lt;a href='https://support.mail.com/security/2fa/application-specific-passwords.html'&gt;app-specific password&lt;/a&gt;"
+        documentation="Using third-party email clients requires a premium mail.com subscription. This is not a limitation of Mail. You might need to use an &lt;a href='https://support.mail.com/security/2fa/application-specific-passwords.html'&gt;app-specific password&lt;/a&gt;"
         domain="mail\\.com,email\\.com,usa\\.com,myself\\.com,consultant\\.com,post\\.com,europe\\.com,asia\\.com,iname\\.com,writeme\\.com,dr\\.com,cheerful\\.com,accountant\\.com,techie\\.com,engineer\\.com,linuxmail\\.org,musician\\.org,contractor\\.net,workmail\\.com,financier\\.com"
         link="https://support.mail.com/premium/imap/server.html#indexlink_help_premium_imap">
         <imap
@@ -2266,16 +2201,7 @@
             host="smtphz.qiye.163.com"
             port="465"
             starttls="false" />
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="http://reg.163.com/open/oauth2/authorize.do"
-            clientId="..."
-            clientSecret="..."
-            enabled="false"
-            privacy="https://ir.netease.com/privacy-policy"
-            redirectUri="https://oauth.faircode.eu/"
-            scopes=""
-            tokenEndpoint="http://reg.163.com/open/oauth2/token.do" />
+
         <!-- https://reg.163.com/help/help_oauth2.html -->
     </provider>
     <provider
@@ -2559,15 +2485,5 @@
             host="mail.thundermail.com"
             port="465"
             starttls="false" />
-        <oauth
-            askAccount="true"
-            authorizationEndpoint="https://auth.tb.pro/realms/tbpro/protocol/openid-connect/auth"
-            clientId="ext-fairemail"
-            clientSecret=""
-            enabled="true"
-            privacy="https://tb.pro/privacy/"
-            redirectUri="https://oauth.faircode.eu/"
-            scopes="openid,profile,email,offline_access"
-            tokenEndpoint="https://auth.tb.pro/realms/tbpro/protocol/openid-connect/token" />
     </provider>
 </providers>

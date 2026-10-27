@@ -99,7 +99,7 @@
         <item name="android:scrollbarTrackVertical">@drawable/scroll_track</item>
         <item name="android:scrollbarFadeDuration">5000</item>
 
-        <item name="viewInflaterClass">eu.faircode.email.AppCompatViewInflaterEx</item>
+        <item name="viewInflaterClass">in.anoopbhatia.mail.AppCompatViewInflaterEx</item>
     </style>
 
     <style name="AppThemeBaseDark" parent="Theme.AppCompat.NoActionBar">
@@ -178,7 +178,7 @@
             @color/material_grey_850
         </item>
 
-        <item name="viewInflaterClass">eu.faircode.email.AppCompatViewInflaterEx</item>
+        <item name="viewInflaterClass">in.anoopbhatia.mail.AppCompatViewInflaterEx</item>
     </style>
 
     <!-- Light -->

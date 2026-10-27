@@ -30,8 +30,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-import eu.faircode.email.Helper;
-import eu.faircode.email.Log;
+import in.anoopbhatia.mail.Helper;
+import in.anoopbhatia.mail.Log;
 
 // https://github.com/javaee/javamail/blob/master/mail/src/main/java/com/sun/mail/imap/protocol/IMAPSaslAuthenticator.java
 public class IMAPSaslAuthenticator implements SaslAuthenticator {

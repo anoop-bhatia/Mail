@@ -10,7 +10,7 @@
         android:background="?attr/selectableItemBackground"
         android:paddingHorizontal="12dp">
 
-        <eu.faircode.email.ViewStripe
+        <in.anoopbhatia.mail.ViewStripe
             android:id="@+id/vwColor"
             android:layout_width="6dp"
             android:layout_height="0dp"

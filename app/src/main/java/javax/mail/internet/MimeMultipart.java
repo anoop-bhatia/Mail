@@ -24,6 +24,7 @@ import com.sun.mail.util.LineOutputStream;
 import com.sun.mail.util.LineInputStream;
 import com.sun.mail.util.ASCIIUtility;
 import com.sun.mail.util.PropUtil;
+import in.anoopbhatia.mail.Log;
 
 /**
  * The MimeMultipart class is an implementation of the abstract Multipart
@@ -879,7 +880,7 @@ public class MimeMultipart extends Multipart {
 				if ("multipart/digest".equalsIgnoreCase(ct.getBaseType()))
 					part.setHeader("Content-Type", "message/rfc822");
 			} catch (Throwable ex) {
-				eu.faircode.email.Log.e(ex);
+				Log.e(ex);
 			}
 		super.addBodyPart(part);
 	    }

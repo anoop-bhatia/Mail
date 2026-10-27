@@ -4,13 +4,10 @@
     <string name="tile_synchronize">Synchronise</string>
     <string name="menu_test">Test programme</string>
     <string name="menu_faq">Support</string>
-    <string name="menu_privacy">Privacy</string>
     <string name="title_list_accounts">Accounts</string>
     <string name="title_list_identities">Identities</string>
     <string name="title_setup_quick">Quick setup</string>
-    <string name="title_setup_analytics">FairEmail does not display ads and does not track or analyse your behaviour.</string>
     <string name="title_setup_account_identity_hint">You can configure a name, colour, and swipe actions in the account settings, and configure a signature and default CC or BCC addresses in the identity settings.</string>
-    <string name="title_setup_gmail_support">Authorising Google accounts will work in the Play Store and GitHub version only because Android checks the digital app signature</string>
     <string name="title_setup_outlook_modern">Due to changes in Microsoft\'s security policies, from 16th September 2024, only the Outlook/Hotmail/Live wizard will work.</string>
     <string name="title_setup_gmail_password">I want to authorise an account with a password instead of an on-device account</string>
     <string name="title_setup_oauth_rationale">Authorise access to your %1$s account</string>
@@ -185,10 +182,10 @@
     <string name="title_disable">Disable</string>
     <string name="title_snooze_doze">Please disable battery optimisations via step 3 of the main settings screen</string>
     <string name="title_snooze_now">Snooze</string>
-    <string name="title_pro_info">        Developing FairEmail took literally thousands of hours and, despite that, most of the features are free to use.
-        FairEmail takes your privacy seriously and doesn\'t show ads and doesn\'t use tracking or analytics to earn money.
-        To maintain and support FairEmail in the long run, some convenience and advanced features are not free to use.
-        FairEmail shows a small message to remind you of this, which will be removed if you purchase the pro features.
+    <string name="title_pro_info">        Developing Mail took literally thousands of hours and, despite that, most of the features are free to use.
+        Mail takes your privacy seriously and doesn\'t show ads and doesn\'t use tracking or analytics to earn money.
+        To maintain and support Mail in the long run, some convenience and advanced features are not free to use.
+        Mail shows a small message to remind you of this, which will be removed if you purchase the pro features.
     </string>
     <string name="title_log_clear">Clear</string>
     <string name="title_power_menu_sync">Synchronisation</string>

@@ -5,12 +5,12 @@
         <oauth
             askAccount="true"
             authorizationEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-            clientId="3514cf2c-e7a3-45a2-80d4-6a3c3498eca0"
-            clientSecret="r=o4@SlzU:MA6MlXM6mPG[44i4gYPq[@"
+            clientId="DUMMY_MICROSOFT_OFFICE365_CLIENT_ID"
+            clientSecret="DUMMY_MICROSOFT_CLIENT_SECRET"
             enabled="true"
             privacy="https://privacy.microsoft.com/privacystatement"
             prompt="login"
-            redirectUri="https://oauth.faircode.eu/"
+            redirectUri="https://example.invalid/DUMMY_OFFICE365_CALLBACK"
             scopes="profile,openid,email,offline_access,https://outlook.office.com/IMAP.AccessAsUser.All,https://outlook.office.com/SMTP.Send,https://outlook.office.com/POP.AccessAsUser.All"
             tokenEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
             tokenScopes="true" />
@@ -19,11 +19,11 @@
         <oauth
             askAccount="true"
             authorizationEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-            clientId="3514cf2c-e7a3-45a2-80d4-6a3c3498eca0"
+            clientId="DUMMY_MICROSOFT_OFFICE365_CLIENT_ID"
             enabled="true"
             privacy="https://privacy.microsoft.com/privacystatement"
             prompt="login"
-            redirectUri="msauth.eu.faircode.email://auth"
+            redirectUri="dummy://example.invalid"
             scopes="profile,openid,email,offline_access,https://outlook.office.com/IMAP.AccessAsUser.All,https://outlook.office.com/SMTP.Send,https://outlook.office.com/POP.AccessAsUser.All"
             tokenEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
             tokenScopes="true" />
@@ -32,22 +32,22 @@
         <oauth
             askAccount="true"
             authorizationEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-            clientId="3514cf2c-e7a3-45a2-80d4-6a3c3498eca0"
+            clientId="DUMMY_MICROSOFT_OFFICE365_CLIENT_ID"
             enabled="true"
             privacy="https://privacy.microsoft.com/privacystatement"
             prompt="login"
-            redirectUri="msauth.eu.faircode.email://auth"
+            redirectUri="dummy://example.invalid"
             scopes="profile,openid,email,offline_access,https://outlook.office.com/IMAP.AccessAsUser.All,https://outlook.office.com/SMTP.Send,https://outlook.office.com/POP.AccessAsUser.All"
             tokenEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
             tokenScopes="true" />
         <graph
             askAccount="true"
             authorizationEndpoint="https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
-            clientId="835c3383-543c-4aa2-98ca-c465eb039987"
+            clientId="DUMMY_MICROSOFT_OUTLOOKGRAPH_CLIENT_ID"
             enabled="true"
             privacy="https://privacy.microsoft.com/privacystatement"
             prompt="login"
-            redirectUri="msauth://eu.faircode.email/xSLzBBuLJunOQPB89rtzM54FXx4%3D"
+            redirectUri="msauth://example.invalid/DUMMY_OUTLOOKGRAPH_SIGNATURE"
             scopes="offline_access,https://graph.microsoft.com/Mail.Send"
             tokenEndpoint="https://login.microsoftonline.com/common/oauth2/v2.0/token"
             tokenScopes="true" />
@@ -56,11 +56,11 @@
         <oauth
             askAccount="true"
             authorizationEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-            clientId="17e57eca-a59b-4574-ac91-b343004898a6"
+            clientId="DUMMY_MICROSOFT_OUTLOOK_CLIENT_ID"
             enabled="true"
             privacy="https://privacy.microsoft.com/privacystatement"
             prompt="login"
-            redirectUri="msauth://eu.faircode.email/xSLzBBuLJunOQPB89rtzM54FXx4%3D"
+            redirectUri="msauth://example.invalid/DUMMY_OUTLOOKGRAPH_SIGNATURE"
             scopes="profile,openid,email,offline_access,https://outlook.office.com/IMAP.AccessAsUser.All,https://outlook.office.com/SMTP.Send,https://outlook.office.com/POP.AccessAsUser.All"
             tokenEndpoint="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
             tokenScopes="true" />

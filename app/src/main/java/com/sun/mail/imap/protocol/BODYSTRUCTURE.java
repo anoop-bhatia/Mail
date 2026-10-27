@@ -426,11 +426,11 @@ public class BODYSTRUCTURE implements Item {
 					("name".equalsIgnoreCase(name) || "filename".equalsIgnoreCase(name)) &&
 					!java.nio.charset.StandardCharsets.US_ASCII.newEncoder().canEncode(value)) {
 				byte[] octets = com.sun.mail.util.ASCIIUtility.getBytes(value);
-				if (eu.faircode.email.CharsetHelper.isUTF8(octets))
+				if (in.anoopbhatia.mail.CharsetHelper.isUTF8(octets))
 					value = new String(octets, java.nio.charset.StandardCharsets.UTF_8);
 			}
 		} catch (Throwable ex) {
-			eu.faircode.email.Log.e(ex);
+			in.anoopbhatia.mail.Log.e(ex);
 		}
 
 		list.set(name, value);

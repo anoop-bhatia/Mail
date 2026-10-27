@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Content is inflated with the owning window's theme, not this window-only theme. -->
+    <style name="Theme.App.Notice" parent="android:style/Theme.Material.Dialog">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowMinWidthMajor">0dp</item>
+        <item name="android:windowMinWidthMinor">0dp</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
+    <!-- The notice is inflated outside the Activity's AppCompat layout pipeline, so its text
+         appearance must not pull any ?attr value from that (possibly wrapped) theme. AppCompat's
+         Small appearance resolves android:textColorLink from the theme, which the Material You
+         themes define through a framework color; where that reference is unresolved TextView
+         throws UnsupportedOperationException from TypedArray.getColorStateList and the whole
+         notice fails to inflate. Size only here: ToastEx sets the color itself. -->
+    <style name="NoticeText" parent="">
+        <item name="android:textSize">14sp</item>
+    </style>
+</resources>

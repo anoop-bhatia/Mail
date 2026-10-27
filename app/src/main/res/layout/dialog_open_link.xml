@@ -63,14 +63,14 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:srcCompat="@drawable/twotone_insert_link_45_24" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etLink"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:imeOptions="actionDone"
             android:inputType="textUri"
-            android:text="https://email.faircode.eu/"
+            android:text="https://anoopbhatia.in/"
             android:textAppearance="@style/TextAppearance.AppCompat.Small"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -227,7 +227,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cbNeverAgain" />
 
-        <eu.faircode.email.SpinnerEx
+        <in.anoopbhatia.mail.SpinnerEx
             android:id="@+id/spOpenWith"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -273,7 +273,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/ibMore" />
 
-        <eu.faircode.email.ContentLoadingProgressBar
+        <in.anoopbhatia.mail.ContentLoadingProgressBar
             android:id="@+id/pbWait"
             style="@style/Base.Widget.AppCompat.ProgressBar"
             android:layout_width="24dp"
@@ -338,7 +338,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvOwner" />
 
-        <eu.faircode.email.ContentLoadingProgressBar
+        <in.anoopbhatia.mail.ContentLoadingProgressBar
             android:id="@+id/pbWhois"
             style="@style/Base.Widget.AppCompat.ProgressBar"
             android:layout_width="24dp"

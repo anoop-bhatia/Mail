@@ -1,0 +1,136 @@
+# Reviewed operation anchors: further callback migrations need no fixed inventory count.
+ActivityView.java	List<EntityAccount>accounts=db.account().getSynchronizingAccounts(null);for(EntityAccountaccount:accounts){List<EntityFolder>folders=db.folder().getSynchronizingFolders(account.id);for(EntityFolderfolder:folders)EntityOp
+Core.java	db.operation().deleteOperation(op.id);for(TupleOperationExs:similar.keySet())db.operation().deleteOperation(s.id);
+Core.java	db.operation().setOperationState(op.id,null);for(TupleOperationExs:similar.keySet())db.operation().setOperationState(s.id,null);
+Core.java	message.id=db.message().insertMessage(message);EntityLog.log(context,account.name+"POPaddedid="+message.id+"uidl/msgid="+message.uidl+"/"+message.msgid);intsequence=1;for(EntityAttachmentattachment:parts.getAttachments()
+FragmentMessages.java	for(longid:ids){EntityMessagemessage=db.message().getMessage(id);if(message==null)continue;EntityAccountaccount=db.account().getAccount(message.account);List<EntityMessage>messages=db.message().getMessagesByThread(messag
+FragmentMessages.java	for(longid:ids){EntityMessagemessage=db.message().getMessage(id);if(message==null)continue;List<EntityMessage>messages=db.message().getMessagesByThread(message.account,message.thread,threading?null:id,message.folder);for
+FragmentMessages.java	for(longid:ids){EntityMessagemessage=db.message().getMessage(id);if(message==null)continue;EntityAccountaccount=db.account().getAccount(message.account);if(account==null)continue;EntityFoldertargetFolder=db.folder().getF
+FragmentMessages.java	EntityAccountaccount=db.account().getAccount(aid);if(account!=null&&account.protocol==EntityAccount.TYPE_POP&&account.leave_deleted)args.putBoolean("leave_deleted",true);List<EntityMessage>messages=db.message().getMessag
+FragmentMessages.java	List<Long>ids=db.message().getMessageUnseen(folder<0?null:folder,folder<0?type:null,filter_unflagged,filter_unknown,filter_snoozed,language_detection?filter_language:null);for(longid:ids){EntityMessagemessage=db.message(
+FragmentMessages.java	for(MessageTargettarget:result){EntityMessagemessage=db.message().getMessage(target.id);if(message==null||!message.ui_hide)continue;Log.i("Moveid="+target.id+"target="+target.targetFolder.name);db.message().setMessageUiB
+FragmentMessages.java	List<TupleIdentityEx>identities=db.identity().getComposableIdentities(null);for(longid:ids){EntityMessagemessage=db.message().getMessage(id);if(message==null||message.fromSelf(identities))continue;EntityAccountaccount=db
+FragmentSetup.java	EntityFolder.getOutbox(context);
+GmailReceiver.java	if(storage!=null)db.message().setMessageFolder(message.id,storage.id);db.message().setMessageLabels(message.id,DB.Converters.fromStringArray(values));db.message().setMessageSeen(message.id,labelState.seen);if(!seenPendin
+MessageClassifier.java	EntityFolderdest=db.folder().getFolderByName(folder.account,classified);if(dest!=null&&dest.auto_classify_target&&(pro||EntityFolder.JUNK.equals(dest.type))&&(!EntityFolder.JUNK.equals(dest.type)||!notJunk)){EntityOperat
+ServiceSynchronize.java	for(longuid:uids)EntityOperation.queue(this,folder,EntityOperation.FETCH,uid,invalidate,deleted);
+ServiceSynchronize.java	for(EntityAccounta:db.account().getAccounts())db.account().setAccountPollExempted(a.id,!a.id.equals(account.id));
+ServiceUI.java	List<EntityAccount>accounts=db.account().getPollAccounts(aid<0?null:aid);for(EntityAccountaccount:accounts){List<EntityFolder>folders;if(fid<0)folders=db.folder().getSynchronizingFolders(account.id);elsefolders=Arrays.as
+WidgetUnifiedRemoteViewsFactory.java	messages=db.message().getWidgetUnified(account<0?null:account,folder<0?null:folder,threading,unseen,flagged,MAX_WIDGET_MESSAGES);
+FragmentDialogJunk.java	db.folder().setFolderDownload(folder.id,folder.download||filter);db.folder().setFolderAutoClassify(folder.id,folder.auto_classify_source||filter,folder.auto_classify_target);db.folder().setFolderDownl
+WorkerFts.java	for(Longid:ids)db.message().setMessageFts(id,true);
+FragmentFolders.java	message.id=db.message().insertMessage(message);EntityLog.log(context,account.name+"Importaddedid="+message.id+"msgid="+message.msgid);intsequence=1;for(EntityAttachmentattachment:parts.getAttachme
+FragmentOptionsBackup.java	account.id=db.account().insertAccount(account);identity.account=account.id;identity.id=db.identity().insertIdentity(identity);
+# Typed Callable batch: committed results and checked-I/O, no rollback returns.
+GraphMailMutator.java	operation.name=EntityOperation.DELETE;operation.args=newJSONArray().toString();
+GraphMailPurger.java	work.phase=(page.nextLink==null?PHASE_READY:PHASE_ENUMERATING);work.nextLink=page.nextLink;
+GraphMailPurger.java	db.operation().setOperationArgs(operation.id,work.args);db.operation().setOperationState(operation.id,state);
+FragmentCompose.java	db.attachment().setDownloaded(attachment.id,file.length());
+FragmentMessages.java	Stringtext=Helper.readText(plain);Stringhtml=
+ServiceUI.java	EntityMessagereply=newEntityMessage();reply.account=identity.account;reply.folder=outbox.id;
+Core.java	returndb.message().deleteHiddenMessages(folder.id,100);
+# Explicit completion batch: only original pre-success returns request rollback.
+ServiceUI.java	EntityFolderfolder=db.folder().getFolderByType(message.account,folderType);
+ServiceUI.java	EntityOperation.queue(this,message,EntityOperation.MOVE,account.move_to);
+ServiceUI.java	GmailMailMutator.getDeleteOperation(account,false)
+ServiceUI.java	EntityContact.TYPE_JUNK,message.received
+ServiceUI.java	EntityOperation.queue(this,message,EntityOperation.FLAG,true);
+ServiceUI.java	EntityOperation.queue(this,message,EntityOperation.SEEN,true);
+ServiceUI.java	db.message().setMessageSnoozed(message.id,Long.MAX_VALUE);
+ServiceUI.java	EntityMessage.snooze(this,id,wakeup);
+AdapterMessage.java	EntityOperation.KEYWORD,keyword,set
+AdapterMessage.java	db.message().setMessageError(message.id,null);
+AdapterMessage.java	EntityMessage.snooze(context,message.id,hide?Long.MAX_VALUE:null);
+AdapterMessage.java	EntityOperation.BODY,null,charset
+AdapterMessage.java	EntityOperation.BODY,!plain
+FragmentCompose.java	returnTransactionResult.commit(draft);
+FragmentFolders.java	db.account().setAccountName(account.id,name);
+FragmentDialogSend.java	db.message().setMessageUiEncrypt(message.id,encrypt);
+FragmentMessages.java	EntityFoldertargetFolder=db.folder().getFolderByType(aid,type);
+FragmentMessages.java	result.add(newMessageTarget(context,message,account,sourceFolder,account,targetFolder));
+FragmentMessages.java	EntityAccounttargetAccount=db.account().getAccount(targetFolder.account);
+FragmentMessages.java	message.ui_busy=null;
+ZohoMailMutator.java	if(db.folder().updateFolder(current)!=1)returnTransactionResult.rollback(false);
+# Return-bearing follow-up batch: retain early exits and original post-cleanup work.
+AdapterMessage.java	message.thread,threading?null:id,seen?null:message.folder
+AdapterMessage.java	message.thread,threading&&thread?null:id,flagged?message.folder:null
+AdapterMessage.java	for(EntityAttachmentattachment:db.attachment().getAttachments(message.id))
+AdapterMessage.java	EntityOperation.queue(context,message,EntityOperation.SEEN,seen);
+AdapterMessage.java	EntityOperation.queue(context,message,EntityOperation.HEADERS);
+AdapterMessage.java	db.message().setMessageRaw(message.id,false);
+Core.java	db.message().setMessageLabels(m.id,DB.Converters.fromStringArray(m.labels));
+FragmentCompose.java	list.addAll(selected);
+FragmentDialogSync.java	FetchMoreRouting.getKeepDays(months)
+FragmentFolders.java	db.message().deleteBrowsedMessages(fid,keep_time);
+FragmentFolders.java	GmailMailMutator.canExpungeFolder(true,folder.selectable,
+FragmentMessages.java	if(account.protocol==EntityAccount.TYPE_POP)db.message().setMessageUiHide(message.id,true);
+FragmentRules.java	rule.id=db.rule().insertRule(rule);
+
+# Bounded void, typed-list and guarded-followup completion batch.
+ServiceUI.java	db.message().setMessageUiIgnored(message.id,true);
+ServiceSynchronize.java	EntityOperation.queue(ServiceSynchronize.this,message,EntityOperation.EXISTS,true);
+FragmentMessages.java	result.add(newMessageTarget(context,threaded,account,sourceFolder,account,targetFolder));
+FragmentMessages.java	Helper.writeText(file,null);
+FragmentMessages.java	List<EntityRule>rules=EntityRule.blockSender(context,message,junk,block_domain);
+# Final bounded all-25 review: genuine results, explicit guards and immutable carriers.
+ActivityCompose.java	returnTransactionResult.commit(message);
+AdapterAttachment.java	db.attachment().deleteAttachment(attachment.id);
+AdapterAttachment.java	returnTransactionResult.commit(java.util.Optional.ofNullable(reload));
+AdapterFolder.java	booleannow=true;
+AdapterMedia.java	returnTransactionResult.commit(java.util.Optional.ofNullable(reload));
+AdapterMessage.java	returnTransactionResult.commit(android.util.Pair.create(account,folder));
+FragmentCompose.java	returnTransactionResult.commit(selectedDraft);
+FragmentFolder.java	db.folder().setFolderTbd(folder.id);
+FragmentFolders.java	thrownewIllegalArgumentException("Operationspending");
+FragmentMessages.java	result.gmailRejected=ids.length;
+FragmentMessages.java	returnTransactionResult.commit(android.util.Pair.create(targetReload,targetGraphAccount));
+FragmentMessages.java	result.add(newMessageTarget(context,threaded,sourceAccount,sourceFolder,targetAccount,targetFolder));
+ServiceSynchronize.java	db.message().setMessageUnsnoozed(message.id,true);
+# Bounded recheck of normalized-input return scopes; no marker/catch boundary moves.
+AdapterMessage.java	db.message().setMessageImportance(message.id,selectedImportance);
+FragmentCompose.java	attachment.name="img"+attachment.sequence+(attachmentExtension==null?"":"."+attachmentExtension);
+FragmentDialogNotes.java	db.message().setMessageNotes(message.id,savedNotes,savedColor);
+FragmentDialogSelectFolder.java	finalStringfolderName=(parent==null?name:parent.name+parent.separator+name);
+FragmentMessages.java	EntityOperation.queue(context,message,EntityOperation.FLAG,true,selectedColor);
+FragmentMessages.java	returnTransactionResult.rollback(selectedWakeup);
+# Single folders-apply completion; mutation and parse ordering retained.
+FragmentDialogFoldersApply.java	db.folder().setFolderProperties(folder.id,Integer.parseInt(selectedSync),Integer.parseInt(selectedKeep));
+# Seven normalized-input delimiter scopes: unchanged bodies, no early exits.
+EntityContact.java	contact.name=contactName;
+FragmentAnswer.java	answer.label=savedLabel;
+FragmentContacts.java	contact.group=contactGroup;
+FragmentFolders.java	db.folder().setFolderColor(folder.id,selectedColor);
+FragmentMessages.java	Objects.equals(threaded.color,selectedColor)
+FragmentMessages.java	db.message().setMessageImportance(threaded.id,selectedImportance);
+FragmentMessages.java	EntityMessage.snooze(context,threaded.id,selectedWakeup);
+# d6fff4c bounded local-value batch
+Core.java	db.message().setMessageError(transactionMessage.id,null);
+Core.java	db.message().setMessageError(failedMessage.id,op.error);
+Core.java	db.message().deleteMessage(removedMessage.id);
+Core.java	if(transactionFound==null)
+FragmentCompose.java	EntityIdentityselectedIdentity=db.identity().getIdentity(id);
+FragmentMessages.java	booleanapiPermanentConfirmation=false;
+FragmentDialogForwardRaw.java	LongselectedAccountId=null;List<String>hashes=newArrayList<>();
+ServiceSend.java	EntityMessageorphan=db.message().getMessage(sentMessageId);if(orphan!=null)if(EntityOperation.shouldQueueSentExists(account))EntityOperation.queue(this,orphan,EntityOperation.EXISTS);elseif(sentFolder!=null)EntityContact.received(this,account,sentFolder,message);
+# f65a044 checked diagnostic-draft batch
+DebugHelper.java	EntityMessagediagnosticDraft=newEntityMessage();
+
+# Cached-Boolean result callbacks reviewed against 294c47f
+ServiceSynchronize.java	returnpollWork?Boolean.TRUE:Boolean.FALSE;
+AdapterMessage.java	returnqueuedBody?Boolean.TRUE:Boolean.FALSE;
+# Message update and Graph relocation reviewed against e41344e
+Core.java	EntityMessageexisting=db.message().getMessage(updatedMessage.id);
+GraphMessageSync.java	returnrelocate?Boolean.TRUE:Boolean.FALSE;
+# Graph cached-body and delete-wakeup batch: unchanged writes and post-end dispatch.
+GraphMailReceiver.java	db.message().setMessageContent(message.id,true,language,plainOnly,cachedPreview,warning);db.message().setMessageHeaders(message.id,headers);db.message().setMessageSize(message.id,size,total);
+FragmentMessages.java	booleanlegacyWake=false;if(ids!=null)for(longid:ids){EntityMessagemessage=db.message().getMessage(id);longaccountHint=getGmailAccountHint(args,id);
+# Zoho authorization: bare nullable existing-account reference, unchanged provider body.
+FragmentOAuth.java	EntityAccountmatchedAccount=null;LongaccountId;if(args.getBoolean("update"))
+FragmentOAuth.java	returnmatchedAccount;
+# Gmail API authorization: unchanged provider body, nullable reference and identity-name fallback.
+FragmentGmailApi.java	EntityAccountmatchedAccount=null;
+FragmentGmailApi.java	returnmatchedAccount;
+
+# Legacy Gmail IMAP/POP authorization account-reference boundary
+FragmentGmail.java	EntityAccountmatchedAccount=null;
+FragmentGmail.java	returnmatchedAccount;

@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.os.Build;
 
 
 public class OpenPgpProviderUtil {
@@ -21,7 +22,13 @@ public class OpenPgpProviderUtil {
         ArrayList<String> result = new ArrayList<>();
 
         Intent intent = new Intent(OpenPgpApi.SERVICE_INTENT_2);
-        List<ResolveInfo> resInfo = context.getPackageManager().queryIntentServices(intent, 0);
+        List<ResolveInfo> resInfo;
+        if (Build.VERSION.SDK_INT >= 33) {
+            resInfo = context.getPackageManager().queryIntentServices(intent,
+                    PackageManager.ResolveInfoFlags.of(0L));
+        } else {
+            resInfo = context.getPackageManager().queryIntentServices(intent, 0);
+        }
         if (resInfo == null) {
             return result;
         }
@@ -40,7 +47,13 @@ public class OpenPgpProviderUtil {
     public static String getOpenPgpProviderName(PackageManager packageManager, String openPgpProvider) {
         Intent intent = new Intent(OpenPgpApi.SERVICE_INTENT_2);
         intent.setPackage(openPgpProvider);
-        List<ResolveInfo> resInfo = packageManager.queryIntentServices(intent, 0);
+        List<ResolveInfo> resInfo;
+        if (Build.VERSION.SDK_INT >= 33) {
+            resInfo = packageManager.queryIntentServices(intent,
+                    PackageManager.ResolveInfoFlags.of(0L));
+        } else {
+            resInfo = packageManager.queryIntentServices(intent, 0);
+        }
         if (resInfo == null) {
             return null;
         }

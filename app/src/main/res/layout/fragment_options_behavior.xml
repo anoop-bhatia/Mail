@@ -183,7 +183,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvDelayHint" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etDefaultSnooze"
                     android:layout_width="100dp"
                     android:layout_height="wrap_content"
@@ -587,7 +587,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swCollapseMultiple" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spSeenDelay"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -649,7 +649,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvAutoCloseHint" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spOnClose"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -707,7 +707,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swCollapseMarked" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spUndoTimeout"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

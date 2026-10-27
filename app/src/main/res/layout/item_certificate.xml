@@ -42,7 +42,7 @@
             android:id="@+id/tvSubject"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="CN=marcel@faircode.eu"
+            android:text="CN=example.com"
             android:textAppearance="@android:style/TextAppearance.Small"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"

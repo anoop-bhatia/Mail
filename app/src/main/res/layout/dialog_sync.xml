@@ -33,7 +33,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvSync" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etMonths"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -49,7 +49,7 @@
             app:layout_constraintTop_toBottomOf="@id/tvFolder">
 
             <requestFocus />
-        </eu.faircode.email.EditTextPlain>
+        </in.anoopbhatia.mail.EditTextPlain>
 
         <TextView
             android:id="@+id/tvMonths"

@@ -257,7 +257,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvAutoIdentity" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etAutoDeleteAge"
                     android:layout_width="100dp"
                     android:layout_height="wrap_content"
@@ -281,7 +281,7 @@
                     app:layout_constraintStart_toEndOf="@id/etAutoDeleteAge"
                     app:layout_constraintTop_toTopOf="@id/etAutoDeleteAge" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etAutoDeleteFreq"
                     android:layout_width="100dp"
                     android:layout_height="wrap_content"
@@ -436,7 +436,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swDiscardDelete" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spSendDelayed"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -470,7 +470,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swSendUndo" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spAnswerActionSingle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -492,7 +492,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/spAnswerActionSingle" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spAnswerActionLong"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -545,7 +545,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent" />
 
-                <eu.faircode.email.ViewButtonColor
+                <in.anoopbhatia.mail.ViewButtonColor
                     android:id="@+id/btnComposeColor"
                     style="?android:attr/buttonStyleSmall"
                     android:layout_width="wrap_content"
@@ -582,7 +582,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvComposeColorHint" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spComposeFont"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -592,7 +592,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvComposeFont" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spComposeTextSize"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -754,7 +754,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swExtendedReply" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etTemplateReply"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -854,7 +854,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swResizeReply" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spSignatureLocation"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -1111,7 +1111,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/swReceipt" />
 
-                <eu.faircode.email.SpinnerEx
+                <in.anoopbhatia.mail.SpinnerEx
                     android:id="@+id/spReceiptType"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -1212,7 +1212,7 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvReplyMoveHint" />
 
-                <eu.faircode.email.EditTextPlain
+                <in.anoopbhatia.mail.EditTextPlain
                     android:id="@+id/etSendRetryMax"
                     android:layout_width="100dp"
                     android:layout_height="wrap_content"

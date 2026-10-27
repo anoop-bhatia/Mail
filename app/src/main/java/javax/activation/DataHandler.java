@@ -256,7 +256,7 @@ public class DataHandler /*implements Transferable*/ {
 			}
 
 		// com.sun.mail.smtp.SMTPTransport.convertTo8Bit
-		eu.faircode.email.Log.i("DataHandler" +
+		in.anoopbhatia.mail.Log.i("DataHandler" +
 				" object=" + (object == null ? null : object.getClass().getName()) +
 				" dch=" + dch.getClass().getName() +
 				" type=" + getContentType());
@@ -283,12 +283,12 @@ public class DataHandler /*implements Transferable*/ {
 		    try {
 			fdch.writeTo(object, objectMimeType, pos);
 		    } catch (IOException e) {
-				eu.faircode.email.Log.e(e);
+				in.anoopbhatia.mail.Log.e(e);
 		    } finally {
 			try {
 			    pos.close();
 			} catch (IOException ie) {
-				eu.faircode.email.Log.e(ie);
+				in.anoopbhatia.mail.Log.e(ie);
 			}
 		    }
 		}

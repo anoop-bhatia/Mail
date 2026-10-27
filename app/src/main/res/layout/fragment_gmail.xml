@@ -7,7 +7,7 @@
     android:layout_height="match_parent"
     android:padding="12dp"
     android:scrollbarStyle="outsideOverlay"
-    tools:context="eu.faircode.email.ActivitySetup">
+    tools:context="in.anoopbhatia.mail.ActivitySetup">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -27,7 +27,6 @@
             android:id="@+id/tvPrivacy"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
             android:layout_marginTop="6dp"
             android:drawableEnd="@drawable/twotone_open_in_new_12"
             android:drawablePadding="6dp"
@@ -36,21 +35,6 @@
             android:textColor="?android:attr/textColorLink"
             app:drawableTint="?android:attr/textColorLink"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/tvTitle" />
-
-        <TextView
-            android:id="@+id/tvPrivacyApp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="6dp"
-            android:drawableEnd="@drawable/twotone_open_in_new_12"
-            android:drawablePadding="6dp"
-            android:text="@string/app_name"
-            android:textAppearance="@style/TextAppearance.AppCompat.Small"
-            android:textColor="?android:attr/textColorLink"
-            app:drawableTint="?android:attr/textColorLink"
-            app:layout_constraintStart_toEndOf="@id/tvPrivacy"
             app:layout_constraintTop_toBottomOf="@id/tvTitle" />
 
         <TextView
@@ -90,7 +74,7 @@
             app:layout_constraintStart_toEndOf="@id/btnGrant"
             app:layout_constraintTop_toTopOf="@id/btnGrant" />
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -105,7 +89,7 @@
             app:layout_constraintTop_toBottomOf="@+id/btnGrant">
 
             <requestFocus />
-        </eu.faircode.email.EditTextPlain>
+        </in.anoopbhatia.mail.EditTextPlain>
 
         <CheckBox
             android:id="@+id/cbPop"
@@ -150,7 +134,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/cbUpdate" />
 
-        <eu.faircode.email.ContentLoadingProgressBar
+        <in.anoopbhatia.mail.ContentLoadingProgressBar
             android:id="@+id/pbSelect"
             style="@style/Base.Widget.AppCompat.ProgressBar"
             android:layout_width="24dp"

@@ -237,7 +237,7 @@ public class ParameterList {
 	    if ((char)type == ';' || type == HeaderTokenizer.Token.ATOM) {
 		// expect parameter name
             if (type == HeaderTokenizer.Token.ATOM)
-                eu.faircode.email.Log.w("In parameter list <" + s + ">" +
+                in.anoopbhatia.mail.Log.w("In parameter list <" + s + ">" +
                         ", at " + h.getNextPos() +
                         ", expected ';', allowing \"" +
                         tk.getValue() + "\"");
@@ -249,8 +249,8 @@ public class ParameterList {
             }
 		// parameter name must be a MIME Atom
 		if (tk.getType() != HeaderTokenizer.Token.ATOM) {
-			if (!recovered && !eu.faircode.email.BuildConfig.PLAY_STORE_RELEASE)
-				eu.faircode.email.Log.w("In parameter list <" + s + ">" +
+			if (!recovered && !recovered)
+				in.anoopbhatia.mail.Log.w("In parameter list <" + s + ">" +
 						", at " + h.getNextPos() +
 						", expected parameter name, " +
 						"got \"" + tk.getValue() + "\"");
@@ -262,8 +262,8 @@ public class ParameterList {
 		// expect '='
 		tk = h.next();
 		if ((char)tk.getType() != '=') {
-			if (!recovered && !eu.faircode.email.BuildConfig.PLAY_STORE_RELEASE)
-				eu.faircode.email.Log.w("In parameter list <" + s + ">" +
+			if (!recovered && !recovered)
+				in.anoopbhatia.mail.Log.w("In parameter list <" + s + ">" +
 						", at " + h.getNextPos() +
 						", expected '=', " +
 						"got \"" + tk.getValue() + "\"");
@@ -283,8 +283,8 @@ public class ParameterList {
 		// parameter value must be a MIME Atom or Quoted String
 		if (type != HeaderTokenizer.Token.ATOM &&
 		    type != HeaderTokenizer.Token.QUOTEDSTRING) {
-			if (!recovered && !eu.faircode.email.BuildConfig.PLAY_STORE_RELEASE)
-				eu.faircode.email.Log.w("In parameter list <" + s + ">" +
+			if (!recovered && !recovered)
+				in.anoopbhatia.mail.Log.w("In parameter list <" + s + ">" +
 						", at " + h.getNextPos() +
 						", expected parameter value, " +
 						"got \"" + tk.getValue() + "\"");
@@ -316,8 +316,8 @@ public class ParameterList {
 		    value = lastValue + " " + tk.getValue();
 		    list.put(lastName, value);
                 } else {
-			if (!recovered && !eu.faircode.email.BuildConfig.PLAY_STORE_RELEASE)
-				eu.faircode.email.Log.w("In parameter list <" + s + ">" +
+			if (!recovered && !recovered)
+				in.anoopbhatia.mail.Log.w("In parameter list <" + s + ">" +
 						", at " + h.getNextPos() +
 						", expected ';', got \"" +
 						tk.getValue() + "\"");

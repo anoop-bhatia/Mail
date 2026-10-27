@@ -4,13 +4,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="eu.faircode.email.ActivityView">
+    tools:context="in.anoopbhatia.mail.ActivityView">
 
-    <eu.faircode.email.SwipeRefreshLayoutEx
+    <in.anoopbhatia.mail.SwipeRefreshLayoutEx
         android:id="@+id/swipeRefresh"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:layout_behavior="eu.faircode.email.BehaviorBottomMargin">
+        app:layout_behavior="in.anoopbhatia.mail.BehaviorBottomMargin">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
@@ -144,25 +144,7 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/tvVpnActive" />
 
-            <TextView
-                android:id="@+id/tvSupport"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
-                android:padding="6dp"
-                android:text="@string/title_pro_support"
-                android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/vSeparatorVpnActive" />
 
-            <View
-                android:id="@+id/vSeparatorSupport"
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="?attr/colorSeparator"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/tvSupport" />
 
             <TextView
                 android:id="@+id/tvHintSupport"
@@ -175,7 +157,7 @@
                 android:textAppearance="@style/TextAppearance.AppCompat.Small"
                 app:layout_constraintEnd_toStartOf="@+id/ibHintSupport"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/vSeparatorSupport" />
+                app:layout_constraintTop_toBottomOf="@id/vSeparatorVpnActive" />
 
             <ImageButton
                 android:id="@+id/ibHintSupport"
@@ -371,7 +353,7 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/vSeparatorMod" />
 
-            <eu.faircode.email.ViewTextDelayed
+            <in.anoopbhatia.mail.ViewTextDelayed
                 android:id="@+id/tvNoEmail"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -382,7 +364,7 @@
                 app:layout_constraintStart_toStartOf="@+id/rvMessage"
                 app:layout_constraintTop_toTopOf="@+id/rvMessage" />
 
-            <eu.faircode.email.ViewTextDelayed
+            <in.anoopbhatia.mail.ViewTextDelayed
                 android:id="@+id/tvNoEmailHint"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -395,7 +377,7 @@
                 app:layout_constraintStart_toStartOf="@+id/rvMessage"
                 app:layout_constraintTop_toBottomOf="@+id/tvNoEmail" />
 
-            <eu.faircode.email.FixedRecyclerView
+            <in.anoopbhatia.mail.FixedRecyclerView
                 android:id="@+id/rvMessage"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
@@ -421,7 +403,7 @@
                 app:layout_constraintEnd_toEndOf="@+id/rvMessage"
                 app:layout_constraintTop_toTopOf="@id/rvMessage" />
 
-            <eu.faircode.email.ContentLoadingProgressBar
+            <in.anoopbhatia.mail.ContentLoadingProgressBar
                 android:id="@+id/pbWait"
                 style="@style/Base.Widget.AppCompat.ProgressBar"
                 android:layout_width="wrap_content"
@@ -568,7 +550,7 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent" />
 
-            <eu.faircode.email.TextViewAutoCompleteAction
+            <in.anoopbhatia.mail.TextViewAutoCompleteAction
                 android:id="@+id/etSearch"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -627,11 +609,6 @@
                 android:layout_height="0dp"
                 app:constraint_referenced_ids="tvVpnActive,vSeparatorVpnActive" />
 
-            <androidx.constraintlayout.widget.Group
-                android:id="@+id/grpSupport"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                app:constraint_referenced_ids="tvSupport,vSeparatorSupport" />
 
             <androidx.constraintlayout.widget.Group
                 android:id="@+id/grpHintSupport"
@@ -681,7 +658,7 @@
                 android:layout_height="0dp"
                 app:constraint_referenced_ids="ibOutbox,tvOutboxCount" />
         </androidx.constraintlayout.widget.ConstraintLayout>
-    </eu.faircode.email.SwipeRefreshLayoutEx>
+    </in.anoopbhatia.mail.SwipeRefreshLayoutEx>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabMore"

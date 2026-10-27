@@ -1,11 +1,12 @@
 <resources>
-    <string name="app_name" translatable="false">FairEmail</string>
-    <string name="app_copyright" translatable="false">Copyright &#x24B8; 2018–2026 by M. Bokhorst</string>
-    <string name="app_search">FairEmail search</string>
+    <string name="app_name" translatable="false">Mail</string>
+    <string name="nav_footer_version" translatable="false">Mail v%1$s (%2$s)</string>
+    <string name="nav_footer_author" translatable="false">By Anoop Bhatia</string>
+    <string name="app_copyright" translatable="false">Copyright &#x24B8; Anoop Bhatia</string>
+    <string name="app_search">Mail search</string>
     <string name="app_send_self">Send to self</string>
-    <string name="app_answer" translatable="false">FairEmail template</string>
-    <string name="app_changelog">Changelog</string>
-    <string name="app_welcome">FairEmail is an open source email app focused on privacy and security. For this reason some features might work differently from what you are used to.</string>
+    <string name="app_answer" translatable="false">Mail template</string>
+    <string name="app_welcome">Mail is an open source email app focused on privacy and security. For this reason some features might work differently from what you are used to.</string>
     <string name="app_limitations">For example, messages are reformatted by default to remove unsafe elements and to improve readability, and opening links needs to be confirmed for safety. Both can be disabled if desired.</string>
     <string name="app_eula" translatable="false">THIS SOFTWARE IS PROVIDED BY THE AUTHOR \'\'AS IS\'\' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</string>
     <string name="app_unsupported">Bugs in the Android version of this particular device cause crashes</string>
@@ -30,8 +31,6 @@
     <string name="channel_send">Send</string>
     <string name="channel_notification">Email</string>
     <string name="channel_progress">Progress</string>
-    <string name="channel_update">Updates</string>
-    <string name="channel_announcements">Announcements</string>
     <string name="channel_warning">Warnings</string>
     <string name="channel_error">Errors</string>
     <string name="channel_alert">Server alerts</string>
@@ -151,6 +150,7 @@
 
     <string name="title_notification_sending">Sending messages</string>
     <string name="title_notification_waiting">Waiting for suitable connection</string>
+    <string name="title_notification_awaiting">Awaiting connection</string>
     <string name="title_notification_idle">Idle</string>
     <string name="title_notification_failed">Account \'%1$s\' failed</string>
     <string name="title_notification_alert">Server alert: \'%1$s\'</string>
@@ -177,10 +177,7 @@
     <string name="menu_legend">Legend</string>
     <string name="menu_test">Test program</string>
     <string name="menu_faq">Support</string>
-    <string name="menu_translate">Help translate</string>
     <string name="menu_issue">Report issue</string>
-    <string name="menu_attribution">Attribution</string>
-    <string name="menu_privacy">Privacy</string>
     <string name="menu_about">About</string>
 
     <string name="menu_pro">Pro features</string>
@@ -190,7 +187,6 @@
     <string name="title_eula">End-user license agreement</string>
     <string name="title_license">Open-source license</string>
     <string name="title_gplv3" translatable="false">GNU General Public License - Version 3</string>
-    <string name="title_contributors">Contributors</string>
     <string name="title_agree">I agree</string>
     <string name="title_disagree">I disagree</string>
 
@@ -211,10 +207,8 @@
     <string name="title_setup_quick">Quick setup</string>
     <string name="title_setup_intro">Setting up an account is just three steps and after that you can send and receive emails</string>
     <string name="title_setup_simple">There is no need to change any other options</string>
-    <string name="title_setup_issue">FairEmail was developed to help you protect your privacy and represents literally thousands of hours of work. If you have any problems, please contact me first for support before leaving a bad review. I am happy to help!</string>
-    <string name="title_setup_analytics">FairEmail does not display ads and does not track or analyze your behavior.</string>
     <string name="title_setup_quick_accounts">Add or change accounts</string>
-    <string name="title_setup_quick_support">Some providers make it difficult to add an account. Please do not blame FairEmail for this, but ask for support instead.</string>
+    <string name="title_setup_quick_support">Some providers make it difficult to add an account. Please do not blame Mail for this, but ask for support instead.</string>
     <string name="title_setup_quick_hint">The entered email address is used to query the email server and autoconfig.thunderbird.net for configuration information</string>
     <string name="title_setup_quick_patience">Please be patient &#8230;</string>
     <string name="title_setup_quick_imap">IMAP server to receive messages</string>
@@ -222,9 +216,7 @@
     <string name="title_setup_quick_certificates">Server certificates</string>
     <string name="title_setup_wizard">Wizard</string>
     <string name="title_setup_wizard_intro">In most cases the wizard button can be used to add an account, otherwise the server addresses can be entered or changed manually using the manual setup option</string>
-    <string name="title_setup_wizard_tutorials">Tutorials</string>
     <string name="title_setup_wizard_multiple">The wizard can be used multiple times to set up multiple accounts</string>
-    <string name="title_setup_wizard_new">I need a new email address</string>
     <string name="title_setup_manual">Manual setup and account options</string>
     <string name="title_setup_classic">Classic configuration</string>
     <string name="title_setup_wizard_hint">The quick setup wizard for \"Other Provider\" above usually works too, and is easier than entering all the server data.</string>
@@ -241,24 +233,18 @@
     <string name="title_setup_graph_api_rationale" translatable="false">Authorize access to your Microsoft account</string>
     <string name="title_setup_zoho_api_rationale" translatable="false">Authorize access to your Zoho account</string>
     <string name="title_setup_graph_reauthorize" translatable="false">Reauthorize Microsoft Graph</string>
-    <string name="title_setup_zoho_client_id" translatable="false">Zoho Client ID</string>
-    <string name="title_setup_zoho_client_secret" translatable="false">Zoho Client Secret</string>
-    <string name="title_setup_zoho_redirect_uri" translatable="false">Zoho Redirect URI</string>
     <string name="title_setup_oauth" translatable="false">%1$s (OAuth)</string>
     <string name="title_setup_android" translatable="false">%1$s (Android)</string>
     <string name="title_setup_google_sign_in">Sign in with Google</string>
     <string name="title_setup_other">Other provider</string>
-    <string name="title_setup_inbound">Incoming email only (email cannot be sent!)</string>
     <string name="title_setup_imap">IMAP account</string>
     <string name="title_setup_pop3">POP3 account</string>
-    <string name="title_setup_oauth_permission">The email provider has approved OAuth only for the Play Store and GitHub version</string>
-    <string name="title_setup_gmail_support">Gmail API authorization is available in the Play Store and GitHub versions; Android verifies the app signature.</string>
     <string name="title_setup_gmail_rationale">Authorize Gmail API access with Google</string>
     <string name="title_setup_gmail_api_rationale" translatable="false">Authorize access to your Gmail account</string>
-    <string name="title_setup_gmail_permissions">Google will ask for access to read and modify Gmail messages and permission to send messages. FairEmail does not request the broader permission for immediate permanent deletion.</string>
+    <string name="title_setup_gmail_permissions">Google will ask for access to read and modify Gmail messages and permission to send messages. Mail does not request the broader permission for immediate permanent deletion.</string>
     <string name="title_setup_gmail_authorize">Authorize with Google</string>
     <string name="title_setup_gmail_reauthorize">Re-authorize Gmail</string>
-    <string name="title_setup_gmail_api_only">Gmail accounts must use the Gmail API authorization option; IMAP, POP, SMTP, and Gmail AppAuth setup are disabled.</string>
+    <string name="title_setup_gmail_api_only">This Gmail API account must use Gmail API authorization; Gmail IMAP accounts can use their configured IMAP authentication.</string>
     <string name="title_setup_gmail_login">If Chrome is signed in to an account, a new account can only be added through Android. This can be avoided by logging out of Chrome via the Chrome sync settings.</string>
     <string name="title_setup_gmail_max">In case of the error message \"You\'re signed in to the maximum number of accounts\", you need to log out the browser from all Google accounts.</string>
     <string name="title_setup_outlook_hint">In the case of an alias address, the Office 365 wizard should probably be used.</string>
@@ -298,7 +284,6 @@
     <string name="title_setup_grant_again">Grant required permissions</string>
     <string name="title_setup_exchange_support">Is Microsoft Exchange supported?</string>
     <string name="title_setup_identity_what">What is an identity?</string>
-    <string name="title_setup_free">Is this app free to use?</string>
     <string name="title_setup_permissions">Grant permissions</string>
     <string name="title_setup_permissions_remark">To access contact information (optional)</string>
     <string name="title_setup_permissions_calendar">To store invitations (optional)</string>
@@ -918,7 +903,7 @@
 
     <string name="title_advanced_power_menu">Add actions to the Android power menu</string>
     <string name="title_advanced_send_self">Add \'send to self\' to Android\'s share menu</string>
-    <string name="title_advanced_external_search">Add \'FairEmail search\' to Android text selection menu</string>
+    <string name="title_advanced_external_search">Add \'Mail search\' to Android text selection menu</string>
     <string name="title_advanced_sort_answers">Sort reply templates by frequency of use</string>
     <string name="title_advanced_external_answer" translatable="false">Provide reply templates to other apps</string>
     <string name="title_advanced_shortcuts">Show frequently used contacts in Android share menu</string>
@@ -963,12 +948,7 @@
     <string name="title_advanced_ai_input_reply">Input the text of the replied message</string>
     <string name="title_advanced_entered_text">Entered text</string>
     <string name="title_advanced_sdcard">I want to use an SD card</string>
-    <string name="title_advanced_watchdog">Periodically check if FairEmail is still active</string>
-    <string name="title_advanced_updates">Check for GitHub updates</string>
-    <string name="title_advanced_check_weekly">Check weekly instead of daily</string>
-    <string name="title_advanced_beta">Check for test versions on BitBucket</string>
-    <string name="title_advanced_changelog">Show changelog after update</string>
-    <string name="title_advanced_announcements">Check for announcements</string>
+    <string name="title_advanced_watchdog">Periodically check if Mail is still active</string>
     <string name="title_advanced_experiments">Try experimental features</string>
     <string name="title_advanced_crash_reports">Send error reports</string>
     <string name="title_advanced_canary" translatable="false">Leak canary</string>
@@ -1074,7 +1054,6 @@
     <string name="title_auto_folder_nav" translatable="false">Add new folders automatically to the navigation menu</string>
     <string name="title_advanced_dmarc_viewer" translatable="false">DMARC viewer</string>
     <string name="title_advanced_global_keywords" translatable="false">Global keywords</string>
-    <string name="title_advanced_test_iab" translatable="false">Test IAB</string>
     <string name="title_advanced_import_providers" translatable="false">Import providers</string>
     <string name="title_advanced_export_classifier" translatable="false">Export classifier</string>
     <string name="title_advanced_processors" translatable="false">Processors: %1$d</string>
@@ -1224,38 +1203,6 @@
 
     <string name="title_experimental" translatable="false">This is an experimental feature!</string>
 
-    <string name="title_advanced_cloud_info" translatable="false">
-        This feature is for synchronizing configuration data between devices.
-    </string>
-    <string name="title_advanced_cloud_security" translatable="false">
-        All data will be end-to-end encrypted and the cloud server cannot see the username, password and content of the data.
-        Data on the cloud server will be automatically deleted after one month of inactivity.
-    </string>
-    <string name="title_advanced_cloud_login" translatable="false">Login</string>
-    <string name="title_advanced_cloud_register" translatable="false">
-        Logging in for the first time will automatically create a cloud account
-    </string>
-    <string name="title_advanced_cloud_password_remark" translatable="false">
-        You can change the password by wiping the data and logging in again
-    </string>
-    <string name="title_advanced_cloud_invalid" translatable="false">Invalid username or password</string>
-    <string name="title_advanced_cloud_activate" translatable="false">Activate</string>
-    <string name="title_advanced_cloud_activate_remark" translatable="false">
-        Cloud sync accounts need to be activated by sending an email within 24 hours.
-        Please use the same email address you used to activate the pro features.
-        A cloud sync account and the email address will not be linked.
-    </string>
-    <string name="title_advanced_cloud_account_remark" translatable="false">
-        Only enabled accounts and identities will be synchronized.
-        Gmail accounts authenticated via Android cannot be synchronized.
-        Folder properties will not be synchronized.
-        Existing accounts on the device will never be deleted.
-    </string>
-    <string name="title_advanced_cloud_receive" translatable="false">Receive data</string>
-    <string name="title_advanced_cloud_send" translatable="false">Send data</string>
-    <string name="title_advanced_cloud_last_sync" translatable="false">Last sync: %1$s</string>
-    <string name="title_advanced_cloud_logout" translatable="false">Logout</string>
-    <string name="title_advanced_cloud_wipe" translatable="false">Wipe cloud data on logout</string>
 
     <string name="title_advanced_never_favorite">Never favorite</string>
     <string name="title_advanced_edit_name">Edit name</string>
@@ -1441,7 +1388,7 @@
     <string name="title_service_protocol">Please double check the protocol (SSL/TLS or STARTTLS)</string>
     <string name="title_service_error10">This account needs to be authenticated again, which can be done via the quick setup wizard</string>
     <string name="title_certificate_error">
-        Due to Google\'s Play Store policies, it is no longer possible to support insecure connections to email servers with certificate issues for the version of FairEmail distributed in the Play Store.
+        Due to Google\'s Play Store policies, it is no longer possible to support insecure connections to email servers with certificate issues for the version of Mail distributed in the Play Store.
         Therefore, this issue can only be resolved by your email provider - the above error information may help them resolve this issue.
     </string>
 
@@ -1725,7 +1672,7 @@
     <string name="title_no_recorder">No suitable audio recorder app available</string>
     <string name="title_no_camera">No suitable camera app available</string>
     <string name="title_no_saf">Storage access framework not available</string>
-    <string name="title_no_stream">FairEmail does not have permission to read this file directly</string>
+    <string name="title_no_stream">Mail does not have permission to read this file directly</string>
     <string name="title_no_stream_help">This can be solved by selecting the file with a more modern file manager app or by granting permission to read files</string>
     <string name="title_no_permissions">The app used to select the file didn\'t grant permission to read it</string>
     <string name="title_no_internet">No or no suitable internet connection</string>
@@ -1771,19 +1718,18 @@
     <string name="title_ask_show_amp_hint">AMP messages are designed to be dynamic and to interact with the internet and can therefore by definition be used to track you</string>
     <string name="title_ask_view_file">View file %1$s ?</string>
     <string name="title_ask_delete_local">Delete local messages? Messages will remain on the remote server.</string>
-    <string name="title_ask_help">Help improve FairEmail</string>
+    <string name="title_ask_help">Help improve Mail</string>
     <string name="title_ask_reporting">Send error reports?</string>
-    <string name="title_reporting_why">Error reporting will help improve FairEmail</string>
+    <string name="title_reporting_why">Error reporting will help improve Mail</string>
 
-    <string name="title_ask_review">Please review FairEmail</string>
+    <string name="title_ask_review">Please review Mail</string>
     <string name="title_ask_review_rationale">
-        You have been using FairEmail for a while.
-        It would be appreciated if you could rate FairEmail in the Play Store.
+        You have been using Mail for a while.
+        It would be appreciated if you could rate Mail in the Play Store.
     </string>
     <string name="title_need_help">I need help</string>
     <string name="title_ask_once">This message will only appear once, unless you select \'Later\'</string>
 
-    <string name="title_third_party">You are using a version of a third party</string>
 
     <string name="title_expand_warning">Expanding this message will download %1$s</string>
     <string name="title_download_message">Downloading &#8230;</string>
@@ -2430,8 +2376,8 @@
     <string name="title_hint_important">Important</string>
     <string name="title_hint_sync">Downloading messages can take some time, depending on the speed of the provider, internet connection, the device and on the number of messages. While downloading messages the app might respond slower.</string>
     <string name="title_hint_sync_note">By default, not all messages will be downloaded to limit storage space and battery and data usage. You can change this by long pressing a folder in the folder list and selecting \'Fetch more messages\'.</string>
-    <string name="title_hint_battery">Since FairEmail by default always receives messages, Android will report FairEmail as always being active. Therefore it might look as if FairEmail is always consuming battery power although this is in fact not the case.</string>
-    <string name="title_hint_reformat">By default, FairEmail reformats messages for privacy and security reasons. To view the original message, tap the \'full screen\' icon above the message text.</string>
+    <string name="title_hint_battery">Since Mail by default always receives messages, Android will report Mail as always being active. Therefore it might look as if Mail is always consuming battery power although this is in fact not the case.</string>
+    <string name="title_hint_reformat">By default, Mail reformats messages for privacy and security reasons. To view the original message, tap the \'full screen\' icon above the message text.</string>
     <string name="title_hint_design">The design is intentionally not distracting, but kept highly functional. There are many options to customize the appearance, but please understand that it is impossible to make everybody completely happy at the same time.</string>
     <string name="title_hint_junk">Spam filtering should be done by the email server and cannot be done reliably on a battery powered device with limited capabilities.</string>
     <string name="title_hint_junk_learn">By moving messages to and from the spam folder, the email server "learns" what spam is</string>
@@ -2457,8 +2403,6 @@
     <string name="title_default_apps">Default apps</string>
     <string name="title_reset_open">Set or clear default apps</string>
     <string name="title_select_app">Select app</string>
-    <string name="title_updated">Update to version %1$s available</string>
-    <string name="title_no_update">No update available</string>
     <string name="title_issue">Do you have a question or problem?</string>
     <string name="title_yes">Yes</string>
     <string name="title_no">No</string>
@@ -2534,13 +2478,13 @@
     <string name="title_pro_one_time">%1$s (one-time purchase)</string>
     <string name="title_pro_no_play">Play Store was not found</string>
     <string name="title_pro_info">
-        Developing FairEmail took literally thousands of hours and, despite that, most of the features are free to use.
-        FairEmail takes your privacy seriously and doesn\'t show ads and doesn\'t use tracking or analytics to earn money.
-        To maintain and support FairEmail in the long run, some convenience and advanced features are not free to use.
-        FairEmail shows a small message to remind you of this, which will be removed if you purchase the pro features.
+        Developing Mail took literally thousands of hours and, despite that, most of the features are free to use.
+        Mail takes your privacy seriously and doesn\'t show ads and doesn\'t use tracking or analytics to earn money.
+        To maintain and support Mail in the long run, some convenience and advanced features are not free to use.
+        Mail shows a small message to remind you of this, which will be removed if you purchase the pro features.
     </string>
     <string name="title_pro_whichever">Whichever features are chosen as pro features, there is always someone who complains that a feature should be free. Please don\'t be that person.</string>
-    <string name="title_pro_google">FairEmail initiates a Play Store purchase, but ultimately Google manages the entire purchase process. So please don\'t blame the app in case of any problems!</string>
+    <string name="title_pro_google">Mail initiates a Play Store purchase, but ultimately Google manages the entire purchase process. So please don\'t blame the app in case of any problems!</string>
     <string name="title_pro_hide">Hide small message for %1$d weeks</string>
     <string name="title_pro_hint">Buying pro features will allow you to use all current and future pro features, will keep this app maintained, and supported.</string>
     <string name="title_pro_price">Why are the pro features so expensive?</string>
@@ -2551,7 +2495,6 @@
     <string name="title_pro_activated">All pro features are activated</string>
     <string name="title_pro_valid">All pro features activated</string>
     <string name="title_pro_invalid">Invalid response</string>
-    <string name="title_pro_support">FairEmail needs your help. Tap to buy pro features to keep the project going or turn off this message.</string>
 
     <string name="title_boundary_error">Error downloading messages from the mail server</string>
     <string name="title_boundary_retry">Try again</string>
@@ -2574,7 +2517,7 @@
     <string name="title_debug_info_send_remark">Normally, the debug info will be stored as a draft message first, so you can check what will be sent</string>
     <string name="title_debug_info_question">Please use the info button if you just have a question</string>
     <string name="title_unexpected_info_remark">Please describe what you were doing when you got the error:</string>
-    <string name="title_issue_subject" translatable="false">FairEmail %1$s issue</string>
+    <string name="title_issue_subject" translatable="false">Mail %1$s issue</string>
 
     <string name="title_widget_title_count">New message count</string>
     <string name="title_widget_title_list">Message list</string>
@@ -3082,9 +3025,6 @@
         <item>PUT</item>
     </string-array>
 
-    <string name="fingerprint" translatable="false">17BA15C1AF55D925F98B99CEA4375D4CDF4C174B</string>
-    <string name="fingerprint_fdroid" translatable="false">77CD40058858DC3A38523E01C227A39AA019F88B</string>
-    <string name="fingerprint_amazon" translatable="false">200D0AA43A8ADBC7BB8237023C1553F4753CA7D2</string>
     <string name="title_gmail_invalid_destination" translatable="false">That is not a writable Gmail destination. Gmail manages Sent and Drafts automatically; choose Inbox, Trash, Spam, or a user label.</string>
     <string name="title_gmail_action_refresh" translatable="false">The Gmail message changed or is no longer available. Refreshing the current server state.</string>
     <string name="public_key" translatable="false">MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtFbxEbzL8u5accPGgBw/XdyiSS5BBE6ZQ9ELpKyJ/OQN+kdYniCAOw3lsQ/GuJScy4Y2HobqbBgLL8GLHG+Yu2EHC9dLjA3v2Mc25vvnfn86BsrpQvz1poN2n+roTBdq09FWbtebJ8m0hDBVmtfRi7RhTKIL4No3kodLhksdnucKjcFheubebWKgpmvbmw7NwuELhaZmyhw8WTtnQ4rZPMhjY1JJZgzwNExXgD7zzg4pJPkuQlfkuRkkvBpHpi3C7VDnYjrBlLHngI4wv3wxQBVwJqlvAT9PmX8dOVnTsWWdJdLQBZVWphuqVY54kjBIovN+o8w03WjsV9QiOQq+XwIDAQAB</string>

@@ -20,13 +20,19 @@ package org.openintents.openpgp.util;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import android.content.Context;
 import android.content.Intent;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.ParcelFileDescriptor;
@@ -39,6 +45,10 @@ import org.openintents.openpgp.util.ParcelFileDescriptorUtil.DataSourceTransferT
 
 
 public class OpenPgpApi {
+    private static final ExecutorService EXECUTOR = new ThreadPoolExecutor(
+            5, 128, 1L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(10), Executors.defaultThreadFactory());
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     public static final String TAG = "OpenPgp API";
 
@@ -341,98 +351,76 @@ public class OpenPgpApi {
         void cancelOperation();
     }
 
-    private class OpenPgpSourceSinkAsyncTask<T> extends AsyncTask<Void, Integer, OpenPgpDataResult<T>>
-            implements CancelableBackgroundOperation {
-        Intent data;
-        OpenPgpDataSource dataSource;
-        OpenPgpDataSink<T> dataSink;
-        IOpenPgpSinkResultCallback<T> callback;
+    private static class BackgroundOperation implements CancelableBackgroundOperation {
+        private volatile Future<?> future;
+        private volatile boolean cancelled;
+        private final OpenPgpDataSource dataSource;
 
-        private OpenPgpSourceSinkAsyncTask(Intent data, OpenPgpDataSource dataSource,
-                OpenPgpDataSink<T> dataSink, IOpenPgpSinkResultCallback<T> callback) {
-            this.data = data;
+        BackgroundOperation(OpenPgpDataSource dataSource) {
             this.dataSource = dataSource;
-            this.dataSink = dataSink;
-            this.callback = callback;
         }
 
-        @Override
-        protected OpenPgpDataResult<T> doInBackground(Void... unused) {
-            return executeApi(data, dataSource, dataSink);
+        void setFuture(Future<?> future) {
+            this.future = future;
+            if (cancelled)
+                future.cancel(true);
         }
 
-        protected void onPostExecute(OpenPgpDataResult<T> result) {
-            callback.onReturn(result.apiResult, result.sinkResult);
+        boolean isCancelled() {
+            return cancelled;
         }
 
         @Override
         public void cancelOperation() {
-            cancel(true);
-            if (dataSource != null) {
+            cancelled = true;
+            Future<?> running = future;
+            if (running != null)
+                running.cancel(true);
+            if (dataSource != null)
                 dataSource.cancel();
-            }
-        }
-    }
-
-    class OpenPgpAsyncTask extends AsyncTask<Void, Integer, Intent> {
-        Intent data;
-        InputStream is;
-        OutputStream os;
-        IOpenPgpCallback callback;
-
-        private OpenPgpAsyncTask(Intent data, InputStream is, OutputStream os, IOpenPgpCallback callback) {
-            this.data = data;
-            this.is = is;
-            this.os = os;
-            this.callback = callback;
-        }
-
-        @Override
-        protected Intent doInBackground(Void... unused) {
-            return executeApi(data, is, os);
-        }
-
-        protected void onPostExecute(Intent result) {
-            callback.onReturn(result);
         }
     }
 
     public <T> CancelableBackgroundOperation executeApiAsync(Intent data, OpenPgpDataSource dataSource,
             OpenPgpDataSink<T> dataSink, final IOpenPgpSinkResultCallback<T> callback) {
-        Messenger messenger = new Messenger(new Handler(new Handler.Callback() {
-            @Override
-            public boolean handleMessage(Message message) {
-                callback.onProgress(message.arg1, message.arg2);
-                return true;
-            }
-        }));
-        data.putExtra(EXTRA_PROGRESS_MESSENGER, messenger);
-
-        OpenPgpSourceSinkAsyncTask<T> task = new OpenPgpSourceSinkAsyncTask<>(data, dataSource, dataSink, callback);
-
-        // don't serialize async tasks!
-        // http://commonsware.com/blog/2012/04/20/asynctask-threading-regression-confirmed.html
-        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Void[]) null);
-
-        return task;
+        return executeApiAsyncInternal(data, dataSource, dataSink, callback, true);
     }
 
-    public AsyncTask executeApiAsync(Intent data, OpenPgpDataSource dataSource, IOpenPgpSinkResultCallback<Void> callback) {
-        OpenPgpSourceSinkAsyncTask<Void> task = new OpenPgpSourceSinkAsyncTask<>(data, dataSource, null, callback);
+    private <T> CancelableBackgroundOperation executeApiAsyncInternal(
+            Intent data, OpenPgpDataSource dataSource, OpenPgpDataSink<T> dataSink,
+            IOpenPgpSinkResultCallback<T> callback, boolean reportProgress) {
+        if (reportProgress) {
+            Messenger messenger = new Messenger(new Handler(Looper.getMainLooper(), new Handler.Callback() {
+                @Override
+                public boolean handleMessage(Message message) {
+                    callback.onProgress(message.arg1, message.arg2);
+                    return true;
+                }
+            }));
+            data.putExtra(EXTRA_PROGRESS_MESSENGER, messenger);
+        }
 
-        // don't serialize async tasks!
-        // http://commonsware.com/blog/2012/04/20/asynctask-threading-regression-confirmed.html
-        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Void[]) null);
+        BackgroundOperation operation = new BackgroundOperation(dataSource);
+        operation.setFuture(EXECUTOR.submit(() -> {
+            OpenPgpDataResult<T> result = executeApi(data, dataSource, dataSink);
+            MAIN_HANDLER.post(() -> {
+                if (!operation.isCancelled())
+                    callback.onReturn(result.apiResult, result.sinkResult);
+            });
+        }));
+        return operation;
+    }
 
-        return task;
+    public CancelableBackgroundOperation executeApiAsync(
+            Intent data, OpenPgpDataSource dataSource, IOpenPgpSinkResultCallback<Void> callback) {
+        return executeApiAsyncInternal(data, dataSource, null, callback, false);
     }
 
     public void executeApiAsync(Intent data, InputStream is, OutputStream os, IOpenPgpCallback callback) {
-        OpenPgpAsyncTask task = new OpenPgpAsyncTask(data, is, os, callback);
-
-        // don't serialize async tasks!
-        // http://commonsware.com/blog/2012/04/20/asynctask-threading-regression-confirmed.html
-        task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Void[]) null);
+        EXECUTOR.execute(() -> {
+            Intent result = executeApi(data, is, os);
+            MAIN_HANDLER.post(() -> callback.onReturn(result));
+        });
     }
 
     public static class OpenPgpDataResult<T> {

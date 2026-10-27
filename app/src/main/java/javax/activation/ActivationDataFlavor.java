@@ -40,7 +40,7 @@ public class ActivationDataFlavor /*extends DataFlavor*/ {
     private String mimeType = null;
     private MimeType mimeObject = null;
     private String humanPresentableName = null;
-    private Class representationClass = null;
+    private Class<?> representationClass = null;
 
     /**
      * Construct a DataFlavor that represents an arbitrary
@@ -59,8 +59,8 @@ public class ActivationDataFlavor /*extends DataFlavor*/ {
      * @param mimeType the MIME type of the data represented by this class
      * @param humanPresentableName the human presentable name of the flavor
      */
-    public ActivationDataFlavor(Class representationClass,
-		      String mimeType, String humanPresentableName) {
+    public ActivationDataFlavor(Class<?> representationClass,
+			      String mimeType, String humanPresentableName) {
 	//super(mimeType, humanPresentableName); // need to call super
 
 	// init private variables:
@@ -86,7 +86,7 @@ public class ActivationDataFlavor /*extends DataFlavor*/ {
      * @param representationClass the class used in this DataFlavor
      * @param humanPresentableName the human presentable name of the flavor
      */
-    public ActivationDataFlavor(Class representationClass,
+    public ActivationDataFlavor(Class<?> representationClass,
 				String humanPresentableName) {
 	//super(representationClass, humanPresentableName);
 	//this.mimeType = super.getMimeType();
@@ -135,7 +135,7 @@ public class ActivationDataFlavor /*extends DataFlavor*/ {
      *
      * @return	the representation class
      */
-    public Class getRepresentationClass() {
+    public Class<?> getRepresentationClass() {
 	return representationClass;
     }
 

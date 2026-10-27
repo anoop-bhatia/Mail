@@ -624,8 +624,7 @@ public abstract class Service implements AutoCloseable {
          * of this event will not take effect until after the event is
          * delivered.
          */
-	@SuppressWarnings("unchecked")
-	Vector<? extends EventListener> v = (Vector)vector.clone();
+	Vector<? extends EventListener> v = new Vector<>(vector);
 	q.enqueue(event, v);
     }
 

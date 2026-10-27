@@ -16,7 +16,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <eu.faircode.email.EditTextPlain
+    <in.anoopbhatia.mail.EditTextPlain
         android:id="@+id/etName"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -30,9 +30,9 @@
         app:layout_constraintTop_toBottomOf="@id/tvSearch">
 
         <requestFocus />
-    </eu.faircode.email.EditTextPlain>
+    </in.anoopbhatia.mail.EditTextPlain>
 
-    <eu.faircode.email.EditTextPlain
+    <in.anoopbhatia.mail.EditTextPlain
         android:id="@+id/etOrder"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -45,7 +45,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/etName" />
 
-    <eu.faircode.email.ViewButtonColor
+    <in.anoopbhatia.mail.ViewButtonColor
         android:id="@+id/btnColor"
         style="?android:attr/buttonStyleSmall"
         android:layout_width="wrap_content"

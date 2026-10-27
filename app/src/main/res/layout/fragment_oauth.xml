@@ -7,7 +7,7 @@
     android:layout_height="match_parent"
     android:padding="12dp"
     android:scrollbarStyle="outsideOverlay"
-    tools:context="eu.faircode.email.ActivitySetup">
+    tools:context="in.anoopbhatia.mail.ActivitySetup">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -37,22 +37,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvTitle" />
 
-        <TextView
-            android:id="@+id/tvPrivacyApp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="6dp"
-            android:drawableEnd="@drawable/twotone_open_in_new_12"
-            android:drawablePadding="6dp"
-            android:text="@string/app_name"
-            android:textAppearance="@style/TextAppearance.AppCompat.Small"
-            android:textColor="?android:attr/textColorLink"
-            app:drawableTint="?android:attr/textColorLink"
-            app:layout_constraintStart_toEndOf="@id/tvPrivacy"
-            app:layout_constraintTop_toBottomOf="@id/tvTitle" />
-
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -68,9 +53,9 @@
             app:layout_constraintTop_toBottomOf="@id/tvPrivacy">
 
             <requestFocus />
-        </eu.faircode.email.EditTextPlain>
+        </in.anoopbhatia.mail.EditTextPlain>
 
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etEmail"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -84,53 +69,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/etName" />
 
-        <eu.faircode.email.EditTextPlain
-            android:id="@+id/etZohoClientId"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:contentDescription="@string/title_setup_zoho_client_id"
-            android:hint="@string/title_setup_zoho_client_id"
-            android:imeOptions="actionNext"
-            android:inputType="textNoSuggestions"
-            android:textAppearance="@style/TextAppearance.AppCompat.Medium"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/etEmail" />
-
-        <eu.faircode.email.EditTextPlain
-            android:id="@+id/etZohoClientSecret"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:contentDescription="@string/title_setup_zoho_client_secret"
-            android:hint="@string/title_setup_zoho_client_secret"
-            android:imeOptions="actionNext"
-            android:inputType="textPassword|textNoSuggestions"
-            android:textAppearance="@style/TextAppearance.AppCompat.Medium"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/etZohoClientId" />
-
-        <eu.faircode.email.EditTextPlain
-            android:id="@+id/etZohoRedirectUri"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:contentDescription="@string/title_setup_zoho_redirect_uri"
-            android:hint="@string/title_setup_zoho_redirect_uri"
-            android:imeOptions="actionNext"
-            android:inputType="textUri|textNoSuggestions"
-            android:textAppearance="@style/TextAppearance.AppCompat.Medium"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/etZohoClientSecret" />
-
-        <androidx.constraintlayout.widget.Group
-            android:id="@+id/grpZoho"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:constraint_referenced_ids="etZohoClientId,etZohoClientSecret,etZohoRedirectUri" />
-
-        <eu.faircode.email.EditTextPlain
+        <in.anoopbhatia.mail.EditTextPlain
             android:id="@+id/etTenant"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -141,7 +80,7 @@
             android:textAppearance="@style/TextAppearance.AppCompat.Small"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/etZohoRedirectUri" />
+            app:layout_constraintTop_toBottomOf="@id/etEmail" />
 
         <TextView
             android:id="@+id/tvTenantHint"
@@ -154,16 +93,6 @@
             app:layout_constraintTop_toBottomOf="@id/etTenant" />
 
         <CheckBox
-            android:id="@+id/cbInboundOnly"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/title_setup_inbound"
-            android:textAppearance="@style/TextAppearance.AppCompat.Small"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/tvTenantHint" />
-
-        <CheckBox
             android:id="@+id/cbPop"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -171,7 +100,7 @@
             android:text="@string/title_setup_pop"
             android:textAppearance="@style/TextAppearance.AppCompat.Small"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/cbInboundOnly" />
+            app:layout_constraintTop_toBottomOf="@id/tvTenantHint" />
 
         <CheckBox
             android:id="@+id/cbRecent"
@@ -241,7 +170,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvBrowser" />
 
-        <eu.faircode.email.ContentLoadingProgressBar
+        <in.anoopbhatia.mail.ContentLoadingProgressBar
             android:id="@+id/pbOAuth"
             style="@style/Base.Widget.AppCompat.ProgressBar"
             android:layout_width="24dp"

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:configure="eu.faircode.email.ActivityWidgetUnified"
+    android:configure="in.anoopbhatia.mail.ActivityWidgetUnified"
     android:initialLayout="@layout/widget_unified"
     android:previewImage="@drawable/widget_preview_unified"
     android:resizeMode="horizontal|vertical"

@@ -17,7 +17,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <eu.faircode.email.EditTextPlain
+    <in.anoopbhatia.mail.EditTextPlain
         android:id="@+id/etSubject"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -31,5 +31,5 @@
         app:layout_constraintTop_toBottomOf="@id/tvSubject">
 
         <requestFocus />
-    </eu.faircode.email.EditTextPlain>
+    </in.anoopbhatia.mail.EditTextPlain>
 </androidx.constraintlayout.widget.ConstraintLayout>

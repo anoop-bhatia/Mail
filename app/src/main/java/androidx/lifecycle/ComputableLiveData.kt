@@ -19,6 +19,7 @@ import androidx.annotation.RestrictTo
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
 import androidx.arch.core.executor.ArchTaskExecutor
+import `in`.anoopbhatia.mail.Log
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -70,7 +71,7 @@ constructor(internal val executor: Executor = ArchTaskExecutor.getIOThreadExecut
                     while (invalid.compareAndSet(true, false)) {
                         var now = android.os.SystemClock.elapsedRealtime()
                         if (value != null && (once || last + 2500 < now)) {
-                            eu.faircode.email.Log.i(liveData.toString() + " post once=" + once + " age=" + (now - last) + " ms")
+                            Log.i(liveData.toString() + " post once=" + once + " age=" + (now - last) + " ms")
                             once = false;
                             last = now;
                             liveData.postValue(value);
@@ -83,7 +84,7 @@ constructor(internal val executor: Executor = ArchTaskExecutor.getIOThreadExecut
                     }
                 } catch (ex: Throwable) {
                     // java.lang.IllegalStateException: Couldn't read row xxx column yyy
-                    eu.faircode.email.Log.e(ex);
+                    Log.e(ex);
                     invalid.set(true);
                 } finally {
                     // release compute lock

@@ -1479,11 +1479,10 @@ void InitDetectEncodingState(DetectEncodingState* destatep) {
 
 //  {{0x6e,0x6c,0x5f,0x5f, 0x05,0xb2,0xae,0xa0,0x32,0xa1,0x36,0x31,0x42,0x39,0x3b,0x33,0x45,0x11,0x6f,0x00,}}, // "nl__"
 //        // ASCII-7-bit=178  Latin1=174  UTF8=160  GB=50  CP1252=161  BIG5=49  Latin2=66  CP1251=57  CP1256=59  CP1250=51  Latin5=69  ISO-8859-15=111  [top ASCII-7-bit]
-int ApplyCompressedProb(const char* iprob, int len,
+int ApplyCompressedProb(const uint8* prob, int len,
                          int weight, DetectEncodingState* destatep) {
   int* dst = &destatep->enc_prob[0];
   int* dst2 = &destatep->hint_weight[0];
-  const uint8* prob = reinterpret_cast<const uint8*>(iprob);
   const uint8* problimit = prob + len;
 
   int largest = -1;
@@ -1528,8 +1527,7 @@ int ApplyCompressedProb(const char* iprob, int len,
 
 
 // Returns subscript of largest (most probable) value [for unit test]
-int TopCompressedProb(const char* iprob, int len) {
-  const uint8* prob = reinterpret_cast<const uint8*>(iprob);
+int TopCompressedProb(const uint8* prob, int len) {
   const uint8* problimit = prob + len;
   int next_prob_sub = 0;
   int topprob = 0;

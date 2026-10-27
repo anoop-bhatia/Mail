@@ -4,12 +4,12 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="eu.faircode.email.ActivitySignature">
+    tools:context="in.anoopbhatia.mail.ActivitySignature">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:layout_behavior="eu.faircode.email.BehaviorBottomPadding">
+        app:layout_behavior="in.anoopbhatia.mail.BehaviorBottomPadding">
 
         <TextView
             android:id="@+id/tvHtmlRemark"
@@ -22,7 +22,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <eu.faircode.email.EditTextCompose
+        <in.anoopbhatia.mail.EditTextCompose
             android:id="@+id/etText"
             android:layout_width="0dp"
             android:layout_height="0dp"

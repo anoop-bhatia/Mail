@@ -25,6 +25,7 @@ import java.util.regex.Pattern;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ResolveInfo;
+import android.os.Build;
 import android.text.TextUtils;
 
 public class OpenPgpUtils {
@@ -63,7 +64,13 @@ public class OpenPgpUtils {
 
     public static boolean isAvailable(Context context) {
         Intent intent = new Intent(OpenPgpApi.SERVICE_INTENT_2);
-        List<ResolveInfo> resInfo = context.getPackageManager().queryIntentServices(intent, 0);
+        List<ResolveInfo> resInfo;
+        if (Build.VERSION.SDK_INT >= 33) {
+            resInfo = context.getPackageManager().queryIntentServices(intent,
+                    android.content.pm.PackageManager.ResolveInfoFlags.of(0L));
+        } else {
+            resInfo = context.getPackageManager().queryIntentServices(intent, 0);
+        }
         return !resInfo.isEmpty();
     }
 

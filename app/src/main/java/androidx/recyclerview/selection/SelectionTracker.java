@@ -529,7 +529,7 @@ public abstract class SelectionTracker<K> {
         private OnContextClickListener mOnContextClickListener;
 
         private BandPredicate mBandPredicate;
-        private int mBandOverlayId = eu.faircode.email.R.drawable.selection_band_overlay;
+        private int mBandOverlayId = in.anoopbhatia.mail.R.drawable.selection_band_overlay;
 
         // TODO(b/144500333): Remove support for overriding gesture and pointer tooltypes.
         private int[] mGestureToolTypes = new int[]{

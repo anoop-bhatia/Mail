@@ -275,10 +275,18 @@ public class IMAPFolder extends Folder implements UIDFolder, ResponseHandler {
      *
      * @see FetchProfile
      */
-    public static class FetchProfileItem extends FetchProfile.Item {
-	protected FetchProfileItem(String name) {
-	    super(name);
-	}
+	public static class FetchProfileItem extends FetchProfile.Item {
+	    /* Package-private immutable capability metadata used by the provider. */
+	    final boolean needSize;
+
+		protected FetchProfileItem(String name) {
+		    this(name, false);
+		}
+
+		private FetchProfileItem(String name, boolean needSize) {
+		    super(name);
+		    this.needSize = needSize;
+		}
 
 	/**
 	 * HEADERS is a fetch profile item that can be included in a
@@ -308,9 +316,9 @@ public class IMAPFolder extends Folder implements UIDFolder, ResponseHandler {
 	 *
 	 * @deprecated
 	 */
-	@Deprecated
-	public static final FetchProfileItem SIZE = 
-		new FetchProfileItem("SIZE");
+		@Deprecated
+public static final FetchProfileItem SIZE =
+			new FetchProfileItem("SIZE", true);
 
 	/**
 	 * MESSAGE is a fetch profile item that can be included in a
@@ -1236,10 +1244,18 @@ public class IMAPFolder extends Folder implements UIDFolder, ResponseHandler {
 		command.append(first ? "RFC822" : " RFC822");
 	    first = false;
 	}
-	if (fp.contains(FetchProfile.Item.SIZE) ||
-		fp.contains(IMAPFolder.FetchProfileItem.SIZE)) {
-	    command.append(first ? "RFC822.SIZE" : " RFC822.SIZE");
-	    first = false;
+		boolean needSize = false;
+		for (FetchProfile.Item item : fp.getItems()) {
+		    if (item == FetchProfile.Item.SIZE ||
+			    item instanceof FetchProfileItem &&
+				    ((FetchProfileItem)item).needSize) {
+			needSize = true;
+			break;
+		    }
+		}
+		if (needSize) {
+		    command.append(first ? "RFC822.SIZE" : " RFC822.SIZE");
+		    first = false;
 	}
 	if (fp.contains(IMAPFolder.FetchProfileItem.INTERNALDATE)) {
 	    command.append(first ? "INTERNALDATE" : " INTERNALDATE");
@@ -2402,7 +2418,7 @@ public class IMAPFolder extends Folder implements UIDFolder, ResponseHandler {
 
 	} catch (CommandFailedException cfx) {
 	    // unsupported charset or search criterion
-		eu.faircode.email.Log.e(new MessagingException(term.getClass().getName(), cfx));
+		in.anoopbhatia.mail.Log.e(new MessagingException(term.getClass().getName(), cfx));
 		if (term instanceof MessageIDTerm) // Yandex: NO [UNAVAILABLE] SEARCH Backend error. sc=...
 			return new Message[0];
 	    return super.search(term);
@@ -2658,7 +2674,7 @@ public class IMAPFolder extends Folder implements UIDFolder, ResponseHandler {
 	} catch (ProtocolException pex) {
 	    throw new MessagingException(pex.getMessage(), pex);
 	} catch (ArrayIndexOutOfBoundsException ex) {
-		eu.faircode.email.Log.w(ex);
+		in.anoopbhatia.mail.Log.w(ex);
 		/*
 			java.lang.ArrayIndexOutOfBoundsException: message number (0) out of bounds (110)
 					at com.sun.mail.imap.MessageCache.getMessage(SourceFile:116)
@@ -3669,7 +3685,7 @@ public class IMAPFolder extends Folder implements UIDFolder, ResponseHandler {
 			Folder f = store.getFolder(mailbox);
 			notifyFolderChangeListeners(f);
 		} catch (Throwable ex) {
-			eu.faircode.email.Log.e(ex);
+			in.anoopbhatia.mail.Log.e(ex);
 		}
     }
 
@@ -4069,7 +4085,7 @@ public class IMAPFolder extends Folder implements UIDFolder, ResponseHandler {
 		if (seqnum < 1) {
 			// rfc3501 2.3.1.2: "A relative position from 1 to the number of messages in the mailbox."
 			// Some servers return sequence number zero when there are no messages (found)
-			eu.faircode.email.Log.w("Sequence=" + seqnum);
+			in.anoopbhatia.mail.Log.w("Sequence=" + seqnum);
 			return null;
 		}
 	if (seqnum > realTotal) {
@@ -4083,7 +4099,7 @@ public class IMAPFolder extends Folder implements UIDFolder, ResponseHandler {
 		logger.fine("ignoring message number " +
 		    seqnum + " outside range " + messageCache.size());
 	    int count = seqnum - realTotal;
-	    eu.faircode.email.Log.w("Adding sequence=" + seqnum + " count=" + count + " total=" + realTotal);
+	    in.anoopbhatia.mail.Log.w("Adding sequence=" + seqnum + " count=" + count + " total=" + realTotal);
 	    messageCache.addMessages(count, realTotal + 1);
 	    realTotal += count;
 	    total += count;

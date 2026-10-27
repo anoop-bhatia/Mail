@@ -22,7 +22,7 @@ import android.os.Handler;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.WorkerThread;
-import androidx.core.os.TraceCompat;
+import android.os.Trace;
 import androidx.lifecycle.DefaultLifecycleObserver;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
@@ -127,12 +127,12 @@ public class EmojiCompatInitializer implements Initializer<Boolean> {
             try {
                 // this is main thread, so mark what we're doing (this trace includes thread
                 // start time in BackgroundLoadingLoader.load
-                TraceCompat.beginSection("EmojiCompat.EmojiCompatInitializer.run");
+                Trace.beginSection("EmojiCompat.EmojiCompatInitializer.run");
                 if (EmojiCompat.isConfigured()) {
                     EmojiCompat.get().load();
                 }
             } finally {
-                TraceCompat.endSection();
+                Trace.endSection();
             }
         }
     }

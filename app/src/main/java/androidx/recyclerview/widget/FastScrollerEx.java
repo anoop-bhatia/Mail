@@ -24,12 +24,12 @@ import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.StateListDrawable;
 import android.view.MotionEvent;
+import android.view.View;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
-import androidx.core.view.ViewCompat;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -213,7 +213,7 @@ public class FastScrollerEx extends RecyclerView.ItemDecoration implements Recyc
     }
 
     private boolean isLayoutRTL() {
-        return ViewCompat.getLayoutDirection(mRecyclerView) == ViewCompat.LAYOUT_DIRECTION_RTL;
+        return mRecyclerView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
     }
 
     public boolean isDragging() {
@@ -481,10 +481,10 @@ public class FastScrollerEx extends RecyclerView.ItemDecoration implements Recyc
         @Override
         public void run() {
             try {
-                eu.faircode.email.Log.i("Fast scroll to=" + scrollTo);
+                in.anoopbhatia.mail.Log.i("Fast scroll to=" + scrollTo);
                 mRecyclerView.scrollToPosition(scrollTo);
             } catch (Throwable ex) {
-                eu.faircode.email.Log.e(ex);
+                in.anoopbhatia.mail.Log.e(ex);
             }
         }
     };

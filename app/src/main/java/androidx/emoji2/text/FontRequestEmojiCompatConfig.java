@@ -30,7 +30,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.RestrictTo;
 import androidx.annotation.WorkerThread;
 import androidx.core.graphics.TypefaceCompatUtil;
-import androidx.core.os.TraceCompat;
+import android.os.Trace;
 import androidx.core.provider.FontRequest;
 import androidx.core.provider.FontsContractCompat;
 import androidx.core.provider.FontsContractCompat.FontFamilyResult;
@@ -369,7 +369,7 @@ public class FontRequestEmojiCompatConfig extends EmojiCompat.Config {
 
                 final MetadataRepo metadataRepo;
                 try {
-                    TraceCompat.beginSection(S_TRACE_BUILD_TYPEFACE);
+                    Trace.beginSection(S_TRACE_BUILD_TYPEFACE);
                     // TODO: Good to add new API to create Typeface from FD not to open FD twice.
                     final Typeface typeface = mFontProviderHelper.buildTypeface(mContext, font);
                     final ByteBuffer buffer = TypefaceCompatUtil.mmap(mContext, null,
@@ -379,7 +379,7 @@ public class FontRequestEmojiCompatConfig extends EmojiCompat.Config {
                     }
                     metadataRepo = MetadataRepo.create(typeface, buffer);
                 } finally {
-                    TraceCompat.endSection();
+                    Trace.endSection();
                 }
                 synchronized (mLock) {
                     if (mCallback != null) {
