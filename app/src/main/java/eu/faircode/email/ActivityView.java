@@ -488,9 +488,8 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                 Bundle args = new Bundle();
                 args.putLong("folder", -1L); // Unified inbox
 
-                FragmentDialogSync sync = new FragmentDialogSync();
-                sync.setArguments(args);
-                sync.show(getSupportFragmentManager(), "nav:fetch");
+                FetchMoreAction.open(ActivityView.this, ActivityView.this,
+                        getSupportFragmentManager(), args, "nav:fetch");
             }
         });
 
@@ -2456,7 +2455,9 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
 
     private void onDebugInfo() {
         FragmentDialogDebug fragment = new FragmentDialogDebug();
-        fragment.setArguments(new Bundle());
+        Bundle args = new Bundle();
+        args.putBoolean(SupportReportRecipient.ARG_SUPPORT_LONG_PRESS, true);
+        fragment.setArguments(args);
         fragment.setTargetActivity(this, REQUEST_DEBUG_INFO);
         fragment.show(getSupportFragmentManager(), "debug");
     }
@@ -2474,7 +2475,9 @@ public class ActivityView extends ActivityBilling implements FragmentManager.OnB
                 boolean send = args.getBoolean("send");
 
                 EntityMessage m = DebugHelper.getDebugInfo(context,
-                        "main", R.string.title_debug_info_remark, null, null, args);
+                        "main", R.string.title_debug_info_remark, null, null, args,
+                        SupportReportRecipient.forMainDrawerLongPress(
+                                args.getBoolean(SupportReportRecipient.ARG_SUPPORT_LONG_PRESS)));
                 if (m == null)
                     return null;
 

@@ -48,6 +48,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -91,6 +92,7 @@ public class FragmentDialogSelectFolder extends FragmentDialogBase {
         final long account = aargs.getLong("account");
         final long[] disabled = aargs.getLongArray("disabled");
         final boolean cancopy = aargs.getBoolean("cancopy");
+        final boolean gmailApi = aargs.getBoolean("gmail_api");
 
         long[] messages = null;
         if (aargs.containsKey("message"))
@@ -165,6 +167,14 @@ public class FragmentDialogSelectFolder extends FragmentDialogBase {
                 account, false, false, false, false, false, new AdapterFolder.IFolderSelectedListener() {
             @Override
             public void onFolderSelected(@NonNull TupleFolderEx folder) {
+                if (gmailApi && (folder.accountId == null || folder.accountId != account ||
+                        !GmailMailMutator.isValidGmailMovePickerTarget(folder.type,
+                                folder.gmail_label_id))) {
+                    ToastEx.makeText(context, R.string.title_gmail_invalid_destination,
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+
                 String name = folder.getDisplayName(context, folder.parent_ref);
                 selected_folders.remove(name);
                 selected_folders.add(0, name);
@@ -193,6 +203,7 @@ public class FragmentDialogSelectFolder extends FragmentDialogBase {
                     return false;
             }
         });
+        adapter.setAllowReadOnlySelection(gmailApi);
 
         btnFavorite1.setVisibility(View.GONE);
         btnFavorite2.setVisibility(View.GONE);
@@ -429,6 +440,24 @@ public class FragmentDialogSelectFolder extends FragmentDialogBase {
 
             @Override
             protected void onExecuted(final Bundle args, Data data) {
+                if (gmailApi && data.account != null && data.account.isGmailApi()) {
+                    if (data.folders != null) {
+                        List<TupleFolderEx> valid = new ArrayList<>();
+                        for (TupleFolderEx target : data.folders)
+                            if (target.accountId != null && target.accountId == account &&
+                                    GmailMailMutator.isValidMovePickerTarget(data.account, target))
+                                valid.add(target);
+                        data.folders = valid;
+                    }
+                    if (data.favorites != null) {
+                        List<EntityFolder> valid = new ArrayList<>();
+                        for (EntityFolder target : data.favorites)
+                            if (GmailMailMutator.isValidMovePickerTarget(data.account, target))
+                                valid.add(target);
+                        data.favorites = valid;
+                    }
+                }
+
                 if (data.folders == null || data.folders.size() == 0)
                     tvNoFolder.setVisibility(View.VISIBLE);
                 else {

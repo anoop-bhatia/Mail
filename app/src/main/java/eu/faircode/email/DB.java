@@ -70,7 +70,7 @@ import javax.mail.internet.InternetAddress;
 // https://developer.android.com/topic/libraries/architecture/room.html
 
 @Database(
-        version = 301,
+        version = 310,
         entities = {
                 EntityIdentity.class,
                 EntityAccount.class,
@@ -3133,6 +3133,62 @@ public abstract class DB extends RoomDatabase {
                                 " WHERE host = 'imap.gmail.com' AND pop = " + EntityAccount.TYPE_IMAP);
                         db.execSQL("UPDATE account SET keep_alive_noop = 0" +
                                 " WHERE host = 'outlook.office365.com' AND pop = " + EntityAccount.TYPE_IMAP);
+                    }
+                }).addMigrations(new Migration(301, 302) {
+                    @Override
+                    public void migrate(@NonNull SupportSQLiteDatabase db) {
+                        logMigration(startVersion, endVersion);
+                        GmailSchemaMigration.migrate(db);
+                    }
+                }).addMigrations(new Migration(302, 303) {
+                    @Override
+                    public void migrate(@NonNull SupportSQLiteDatabase db) {
+                        logMigration(startVersion, endVersion);
+                        GmailLabelFolderMigration.migrate(db);
+                    }
+                }).addMigrations(new Migration(303, 304) {
+                    @Override
+                    public void migrate(@NonNull SupportSQLiteDatabase db) {
+                        logMigration(startVersion, endVersion);
+                        GmailSyncMigration.migrate(db);
+                    }
+                }).addMigrations(new Migration(304, 305) {
+                    @Override
+                    public void migrate(@NonNull SupportSQLiteDatabase db) {
+                        logMigration(startVersion, endVersion);
+                        GmailFolderPageMigration.migrate(db);
+                    }
+                }).addMigrations(new Migration(305, 306) {
+                    @Override
+                    public void migrate(@NonNull SupportSQLiteDatabase db) {
+                        logMigration(startVersion, endVersion);
+                        GmailReceivedDateMigration.migrate(db);
+                    }
+                }).addMigrations(new Migration(306, 307) {
+                    @Override
+                    public void migrate(@NonNull SupportSQLiteDatabase db) {
+                        logMigration(startVersion, endVersion);
+                        ZohoSchemaMigration.migrate(db);
+                    }
+                }).addMigrations(new Migration(307, 308) {
+                    @Override
+                    public void migrate(@NonNull SupportSQLiteDatabase db) {
+                        logMigration(startVersion, endVersion);
+                        GraphSchemaMigration.migrate(db);
+                    }
+                }).addMigrations(new Migration(308, 309) {
+                    @Override
+                    public void migrate(@NonNull SupportSQLiteDatabase db) {
+                        logMigration(startVersion, endVersion);
+                        ZohoSchemaMigration.migrateRecentScan(db);
+                    }
+                }).addMigrations(new Migration(309, 310) {
+                    @Override
+                    public void migrate(@NonNull SupportSQLiteDatabase db) {
+                        logMigration(startVersion, endVersion);
+                        db.execSQL("ALTER TABLE `attachment` ADD COLUMN `provider_id` TEXT");
+                        db.execSQL("ALTER TABLE `attachment` ADD COLUMN `provider_folder` TEXT");
+                        db.execSQL("ALTER TABLE `attachment` ADD COLUMN `provider_type` TEXT");
                     }
                 }).addMigrations(new Migration(998, 999) {
                     @Override

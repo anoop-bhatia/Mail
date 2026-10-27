@@ -20,7 +20,6 @@ package eu.faircode.email;
 */
 
 import static android.app.Activity.RESULT_OK;
-import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_GMAIL;
 import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_OAUTH;
 
 import android.app.Dialog;
@@ -167,7 +166,7 @@ public class FragmentDialogAccount extends FragmentDialogBase {
             public void onChanged(EntityAccount account) {
                 tvName.setText(account.name);
                 ibEditName.setEnabled(true);
-                boolean isGmail = (account.auth_type == AUTH_TYPE_GMAIL ||
+                boolean isGmail = (account.isGmailApi() ||
                         (account.auth_type == AUTH_TYPE_OAUTH && "gmail".equals(account.provider)));
                 btnGmail.setVisibility(hasGmail && isGmail ? View.VISIBLE : View.GONE);
             }

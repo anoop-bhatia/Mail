@@ -115,6 +115,7 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
 
     private String search = null;
     private List<Long> disabledIds = new ArrayList<>();
+    private boolean allowReadOnlySelection;
     private List<TupleFolderEx> all = new ArrayList<>();
     private List<TupleFolderEx> selected = new ArrayList<>();
 
@@ -339,9 +340,8 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
                 ivNotify.setVisibility(
                         folder.notify && !show_compact
                                 ? View.VISIBLE : View.GONE);
-                ivAutoAdd.setVisibility(BuildConfig.DEBUG &&
-                        EntityFolder.SENT.equals(folder.type) &&
-                        (folder.auto_add == null || folder.auto_add)
+                ivAutoAdd.setVisibility(FolderAutoAddMarkerPolicy.shouldShow(
+                        BuildConfig.DEBUG, folder.type, folder.auto_add, folder.accountAuthType)
                         ? View.VISIBLE : View.GONE);
             }
 
@@ -512,7 +512,7 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
 
         private boolean isDisabled(EntityFolder folder) {
             return (!folder.selectable ||
-                    (folder.read_only && listener != null) ||
+                    (folder.read_only && listener != null && !allowReadOnlySelection) ||
                     disabledIds.contains(folder.id));
         }
 
@@ -620,19 +620,51 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
 
             if (folder.selectable) {
                 if (folder.account != null && folder.accountProtocol == EntityAccount.TYPE_IMAP) {
-                    popupMenu.getMenu().add(Menu.NONE, R.string.title_synchronize_more, order++, R.string.title_synchronize_more);
+                    if (FolderActionCapabilities.canFetchMore(folder))
+                        popupMenu.getMenu().add(Menu.NONE, R.string.title_synchronize_more, order++, R.string.title_synchronize_more);
 
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_delete_local, order++, R.string.title_delete_local);
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_delete_browsed, order++, R.string.title_delete_browsed);
-                    if (!perform_expunge || BuildConfig.DEBUG)
+                    boolean zohoApi = (ZohoOAuth.isProviderId(folder.accountProvider) ||
+                            (folder.accountAuthType != null &&
+                                    folder.accountAuthType == ServiceAuthenticator.AUTH_TYPE_ZOHO));
+                    boolean gmailApiFolder = (folder.gmail_label_id != null ||
+                            (folder.accountAuthType != null &&
+                                    folder.accountAuthType == ServiceAuthenticator.AUTH_TYPE_GMAIL));
+                    boolean nativeRestFolder = FolderActionCapabilities.isNativeRestFolder(folder);
+                    boolean canExpunge;
+                    if (nativeRestFolder)
+                        canExpunge = FolderActionCapabilities.canExpunge(folder);
+                    else {
+                        boolean gmailTrash = GmailMailMutator.canExpungeFolder(false,
+                                folder.selectable, folder.type, folder.gmail_label_id);
+                        canExpunge = ((zohoApi && EntityFolder.TRASH.equals(folder.type)) ||
+                                (gmailApiFolder ? gmailTrash && (!perform_expunge || BuildConfig.DEBUG) :
+                                        (!zohoApi && (!perform_expunge || BuildConfig.DEBUG))));
+                    }
+                    if (canExpunge && ((zohoApi && EntityFolder.TRASH.equals(folder.type)) ||
+                            (!zohoApi && (!perform_expunge || BuildConfig.DEBUG))))
                         popupMenu.getMenu().add(Menu.NONE, R.string.title_expunge, order++, R.string.title_expunge);
                 }
 
                 popupMenu.getMenu().add(Menu.NONE, R.string.title_mark_all_read, order++, R.string.title_mark_all_read);
 
-                if (EntityFolder.TRASH.equals(folder.type))
+                boolean zohoApi = (ZohoOAuth.isProviderId(folder.accountProvider) ||
+                        (folder.accountAuthType != null &&
+                                folder.accountAuthType == ServiceAuthenticator.AUTH_TYPE_ZOHO));
+                boolean gmailApiFolder = (folder.gmail_label_id != null ||
+                        (folder.accountAuthType != null &&
+                                folder.accountAuthType == ServiceAuthenticator.AUTH_TYPE_GMAIL));
+                boolean nativeRestFolder = FolderActionCapabilities.isNativeRestFolder(folder);
+                boolean gmailTrash = GmailMailMutator.canExpungeFolder(gmailApiFolder,
+                        folder.selectable, folder.type, folder.gmail_label_id);
+                if (EntityFolder.TRASH.equals(folder.type) &&
+                        (nativeRestFolder ? FolderActionCapabilities.canEmptyFolder(folder) :
+                                (!gmailApiFolder || gmailTrash)))
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_empty_trash, order++, R.string.title_empty_trash);
-                else if (EntityFolder.JUNK.equals(folder.type))
+                else if (EntityFolder.JUNK.equals(folder.type) &&
+                        (nativeRestFolder ? FolderActionCapabilities.canEmptyFolder(folder) :
+                                (!zohoApi && !gmailApiFolder)))
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_empty_spam, order++, R.string.title_empty_spam);
 
                 if (folder.account != null && folder.accountProtocol == EntityAccount.TYPE_IMAP)
@@ -652,7 +684,8 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
 
                 if (folder.account != null && folder.accountProtocol == EntityAccount.TYPE_IMAP) {
                     boolean subscriptions = prefs.getBoolean("subscriptions", false);
-                    if (subscriptions && !folder.read_only)
+                    if (subscriptions && !folder.read_only &&
+                            FolderActionCapabilities.canManageLegacyImapFolders(folder))
                         popupMenu.getMenu().add(Menu.FIRST + 1, R.string.title_subscribe, order++, R.string.title_subscribe)
                                 .setCheckable(true).setChecked(folder.subscribed != null && folder.subscribed);
 
@@ -724,7 +757,7 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
                     submenu.add(Menu.FIRST, R.string.title_edit_color, 13, R.string.title_edit_color);
             }
 
-            if (folder.account != null && folder.accountProtocol == EntityAccount.TYPE_IMAP)
+            if (FolderActionCapabilities.canManageLegacyImapFolders(folder))
                 popupMenu.getMenu().add(Menu.NONE, R.string.title_create_sub_folder, order++, R.string.title_create_sub_folder)
                         .setEnabled(folder.inferiors);
 
@@ -732,6 +765,7 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
                 popupMenu.getMenu().add(Menu.NONE, R.string.title_pin, order++, R.string.title_pin);
 
             if (!folder.read_only && EntityFolder.USER.equals(folder.type) &&
+                    !FolderActionCapabilities.isNativeRestFolder(folder) &&
                     (folder.child_refs == null || folder.child_refs.isEmpty()))
                 popupMenu.getMenu().add(Menu.NONE, R.string.title_delete, order++, R.string.title_delete);
 
@@ -899,7 +933,8 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
 
                                 if (folder.account != null) {
                                     EntityAccount account = db.account().getAccount(folder.account);
-                                    if (account != null && !"connected".equals(account.state))
+                                    if (account != null && !account.isNativeRestApi() &&
+                                            !"connected".equals(account.state))
                                         now = false;
                                 }
 
@@ -1087,9 +1122,8 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
                     args.putString("name", folder.getDisplayName(context));
                     args.putBoolean("children", children);
 
-                    FragmentDialogSync sync = new FragmentDialogSync();
-                    sync.setArguments(args);
-                    sync.show(parentFragment.getParentFragmentManager(), "folder:months");
+                    FetchMoreAction.open(context, owner,
+                            parentFragment.getParentFragmentManager(), args, "folder:months");
                 }
 
                 private void onActionEnableDownload(boolean enabled) {
@@ -1239,6 +1273,14 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
                             EntityFolder folder = db.folder().getFolder(id);
                             if (folder == null)
                                 return null;
+
+                            EntityAccount account = (folder.account == null ? null :
+                                    db.account().getAccount(folder.account));
+                            if (account != null && account.isNativeRestApi() &&
+                                    !FolderActionCapabilities.canExpunge(account, folder)) {
+                                EntityLog.log(context, "Refused stale/unsupported expunge action folder=" + id);
+                                return null;
+                            }
 
                             EntityOperation.queue(context, folder, EntityOperation.EXPUNGE);
                             return null;
@@ -1569,6 +1611,10 @@ public class AdapterFolder extends RecyclerView.Adapter<AdapterFolder.ViewHolder
 
     void setDisabled(List<Long> ids) {
         disabledIds = ids;
+    }
+
+    void setAllowReadOnlySelection(boolean allow) {
+        allowReadOnlySelection = allow;
     }
 
     public void set(@NonNull List<TupleFolderEx> folders) {

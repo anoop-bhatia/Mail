@@ -669,7 +669,8 @@ public class FragmentAccounts extends FragmentBase {
                             outbox = true;
                         else {
                             EntityAccount account = db.account().getAccount(folder.account);
-                            if (account != null && !"connected".equals(account.state)) {
+                            if (account != null && !account.isNativeRestApi() &&
+                                    !"connected".equals(account.state)) {
                                 now = false;
                                 if (!account.isTransient(context))
                                     reload = true;

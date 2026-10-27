@@ -19,8 +19,6 @@ package eu.faircode.email;
     Copyright 2018-2026 by Marcel Bokhorst (M66B)
 */
 
-import static eu.faircode.email.GmailState.TYPE_GOOGLE;
-
 import android.accounts.AuthenticatorException;
 import android.accounts.OperationCanceledException;
 import android.content.Context;
@@ -70,6 +68,8 @@ public class ServiceAuthenticator extends Authenticator {
     static final int AUTH_TYPE_GMAIL = 2;
     static final int AUTH_TYPE_OAUTH = 3;
     static final int AUTH_TYPE_GRAPH = 4;
+    static final int AUTH_TYPE_ZOHO = 5;
+    static final int AUTH_TYPE_GRAPH_API = 6;
 
     static final long MIN_REFRESH_INTERVAL = 15 * 60 * 1000L;
     static final long MIN_FORCE_REFRESH_INTERVAL = 15 * 60 * 1000L;
@@ -82,11 +82,26 @@ public class ServiceAuthenticator extends Authenticator {
             String user, String password,
             IAuthenticated intf) {
         this.context = context.getApplicationContext();
-        this.auth = auth;
+        this.auth = getEffectiveAuthType(auth, password);
         this.provider = provider;
         this.user = user;
         this.password = password;
         this.intf = intf;
+    }
+
+    static int getEffectiveAuthType(int auth, String password) {
+        if (auth == AUTH_TYPE_GMAIL || GmailState.isApiState(password))
+            return AUTH_TYPE_GMAIL;
+        if (auth == AUTH_TYPE_ZOHO || ZohoState.isApiState(password))
+            return AUTH_TYPE_ZOHO;
+        return auth;
+    }
+
+    static String getAuthTokenType(String type) {
+        // https://developers.google.com/gmail/imap/xoauth2-protocol
+        if (GmailState.TYPE_GOOGLE.equals(type))
+            return "oauth2:https://mail.google.com/";
+        return null;
     }
 
     @Override
@@ -108,7 +123,8 @@ public class ServiceAuthenticator extends Authenticator {
 
         Log.i(user + " returning " +
                 (auth == AUTH_TYPE_PASSWORD ? "password" : "token") +
-                (BuildConfig.DEBUG ? "=" + token : ""));
+                (BuildConfig.DEBUG && auth != AUTH_TYPE_GMAIL && auth != AUTH_TYPE_ZOHO &&
+                        auth != AUTH_TYPE_GRAPH_API ? "=" + token : ""));
         return new PasswordAuthentication(user, token);
     }
 
@@ -127,6 +143,27 @@ public class ServiceAuthenticator extends Authenticator {
                     intf.onPasswordChanged(context, password);
             }
 
+            return authState.getAccessToken();
+        } else if (auth == AUTH_TYPE_ZOHO) {
+            ZohoState authState = ZohoState.jsonDeserialize(password);
+            if (authState.needsRefresh(System.currentTimeMillis(), forceRefresh))
+                authState = ZohoOAuth.refresh(context, authState);
+            String newPassword = authState.jsonSerializeString();
+            if (!Objects.equals(password, newPassword)) {
+                password = newPassword;
+                if (intf != null)
+                    intf.onPasswordChanged(context, password);
+            }
+            return authState.accessToken;
+        } else if (auth == AUTH_TYPE_GRAPH_API) {
+            AuthState authState = AuthState.jsonDeserialize(password);
+            OAuthRefresh(context, provider, AUTH_TYPE_GRAPH_API, user, authState, forceRefresh);
+            String newPassword = authState.jsonSerializeString();
+            if (!Objects.equals(password, newPassword)) {
+                password = newPassword;
+                if (intf != null)
+                    intf.onPasswordChanged(context, password);
+            }
             return authState.getAccessToken();
         } else if (auth == AUTH_TYPE_OAUTH && provider != null) {
             AuthState authState = AuthState.jsonDeserialize(password);
@@ -147,10 +184,53 @@ public class ServiceAuthenticator extends Authenticator {
             return password;
     }
 
+    String refreshGmailTokenAfterUnauthorized() throws IOException {
+        if (auth != AUTH_TYPE_GMAIL)
+            throw new IOException("Gmail token reacquisition requested for a non-Gmail account");
+        GmailState authState = GmailState.jsonDeserialize(password);
+        authState.refreshAfterUnauthorized(context, "android", user);
+        String newPassword = authState.jsonSerializeString();
+        if (!Objects.equals(password, newPassword)) {
+            password = newPassword;
+            if (intf != null)
+                intf.onPasswordChanged(context, password);
+        }
+        try {
+            return authState.getAccessToken();
+        } catch (AuthenticatorException ex) {
+            throw new IOException("Gmail requires Google authorization", ex);
+        }
+    }
+
+    String refreshZohoTokenAfterUnauthorized() throws IOException, JSONException {
+        if (auth != AUTH_TYPE_ZOHO)
+            throw new IOException("Zoho token reacquisition requested for a non-Zoho account");
+        try {
+            return refreshToken(true);
+        } catch (AuthenticatorException | OperationCanceledException | MessagingException ex) {
+            throw new IOException("Zoho Mail requires authorization", ex);
+        }
+    }
+
+    String refreshGraphTokenAfterUnauthorized() throws IOException, JSONException {
+        if (auth != AUTH_TYPE_GRAPH_API)
+            throw new IOException("Microsoft Graph token reacquisition requested for a non-Graph mail account");
+        try {
+            return refreshToken(true);
+        } catch (AuthenticatorException | OperationCanceledException | MessagingException ex) {
+            throw new IOException("Microsoft Graph mail requires account reauthorization", ex);
+        }
+    }
+
     Long getAccessTokenExpirationTime() {
         try {
             if (auth == AUTH_TYPE_GMAIL) {
                 GmailState authState = GmailState.jsonDeserialize(password);
+                return authState.getAccessTokenExpirationTime();
+            } else if (auth == AUTH_TYPE_ZOHO) {
+                return ZohoState.jsonDeserialize(password).expiresAt;
+            } else if (auth == AUTH_TYPE_GRAPH_API) {
+                AuthState authState = AuthState.jsonDeserialize(password);
                 return authState.getAccessTokenExpirationTime();
             } else if (auth == AUTH_TYPE_OAUTH) {
                 AuthState authState = AuthState.jsonDeserialize(password);
@@ -194,17 +274,29 @@ public class ServiceAuthenticator extends Authenticator {
             if (needsRefresh)
                 authState.setNeedsTokenRefresh(true);
 
+            String userInfo = (auth_type == AUTH_TYPE_GRAPH || auth_type == AUTH_TYPE_GRAPH_API
+                    ? "" : " user=" + user);
             EntityLog.log(context, EntityLog.Type.General, "Token" +
                     " provider=" + id + ":" + getAuthTypeName(auth_type) +
-                    " user=" + user +
+                    userInfo +
                     " expiration=" + (expiration == null ? null : new Date(expiration)) +
                     " need=" + needsRefresh + "/" + authState.getNeedsTokenRefresh() +
                     " force=" + forceRefresh +
                     " last=" + (last_force < 0 ? null : new Date(last_force)));
 
             ClientAuthentication clientAuth;
-            EmailProvider provider = EmailProvider.getProvider(context, id);
-            EmailProvider.OAuth oauth = (auth_type == AUTH_TYPE_GRAPH ? provider.graph : provider.oauth);
+            String providerId = (auth_type == AUTH_TYPE_GRAPH_API
+                    ? GraphOAuth.LEGACY_PROVIDER_ID : id);
+            EmailProvider provider = EmailProvider.getProvider(context, providerId);
+            EmailProvider.OAuth oauth;
+            if (auth_type == AUTH_TYPE_GRAPH_API)
+                oauth = GraphOAuth.getProfile();
+            else if (auth_type == AUTH_TYPE_GRAPH)
+                oauth = (provider.legacyGraph == null ? provider.graph : provider.legacyGraph);
+            else
+                oauth = (provider.legacyOauth == null ? provider.oauth : provider.legacyOauth);
+            if (oauth == null)
+                throw new IllegalStateException("No OAuth refresh configuration for provider " + id);
 
             if (oauth.clientSecret == null)
                 clientAuth = NoClientAuthentication.INSTANCE;
@@ -218,7 +310,7 @@ public class ServiceAuthenticator extends Authenticator {
             if (oauth.tokenScopes)
                 params.put("scope", TextUtils.join(" ", oauth.scopes));
 
-            Log.i("OAuth refresh provider=" + id + ":" + getAuthTypeName(auth_type) + " user=" + user);
+            Log.i("OAuth refresh provider=" + id + ":" + getAuthTypeName(auth_type) + userInfo);
             AppAuthConfiguration config = new AppAuthConfiguration.Builder()
                     .setBrowserMatcher(new BrowserMatcher() {
                         @Override
@@ -250,7 +342,7 @@ public class ServiceAuthenticator extends Authenticator {
                 Long e = authState.getAccessTokenExpirationTime();
                 Log.i("OAuth refreshed" +
                         " provider=" + id + ":" + getAuthTypeName(auth_type) +
-                        " user=" + user +
+                        userInfo +
                         " expiration=" + (e == null ? null : new Date(e)));
             } else {
                 EntityLog.log(context, "Token refresh failed" +
@@ -274,15 +366,12 @@ public class ServiceAuthenticator extends Authenticator {
             return "oauth";
         else if (auth_type == AUTH_TYPE_GRAPH)
             return "graph";
+        else if (auth_type == AUTH_TYPE_ZOHO)
+            return "zoho";
+        else if (auth_type == AUTH_TYPE_GRAPH_API)
+            return "graph-api";
         else
             return "?" + auth_type;
-    }
-
-    static String getAuthTokenType(String type) {
-        // https://developers.google.com/gmail/imap/xoauth2-protocol
-        if (TYPE_GOOGLE.equals(type))
-            return "oauth2:https://mail.google.com/";
-        return null;
     }
 
     private static class ErrorHolder {

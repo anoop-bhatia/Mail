@@ -30,7 +30,7 @@ import java.util.Objects;
         value = TupleFolderView.query
 )
 public class TupleFolderView {
-    static final String query = "SELECT id, account, name, type, inherited_type, display, color, unified, notify, read_only FROM folder";
+    static final String query = "SELECT id, account, name, type, inherited_type, display, color, unified, notify, read_only, gmail_label_id, zoho_folder_id FROM folder";
 
     @NonNull
     public Long id;
@@ -48,6 +48,8 @@ public class TupleFolderView {
     public Boolean notify = false;
     @NonNull
     public Boolean read_only = false;
+    public String gmail_label_id;
+    public String zoho_folder_id;
 
     @Override
     public boolean equals(@Nullable Object obj) {
@@ -62,7 +64,9 @@ public class TupleFolderView {
                     Objects.equals(this.color, other.color) &&
                     this.unified == other.unified &&
                     this.notify == other.notify &&
-                    this.read_only == other.read_only);
+                    this.read_only == other.read_only &&
+                    Objects.equals(this.gmail_label_id, other.gmail_label_id) &&
+                    Objects.equals(this.zoho_folder_id, other.zoho_folder_id));
         } else
             return false;
     }

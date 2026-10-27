@@ -123,6 +123,9 @@ public interface DaoIdentity {
 
     @Query("UPDATE identity SET password = :password WHERE id = :id AND NOT (password IS :password)")
     int setIdentityPassword(long id, String password);
+    @Query("UPDATE identity SET password = :password, auth_type = :auth_type, provider = :provider" +
+            " WHERE id = :id")
+    int setIdentityPasswordAuth(long id, String password, int auth_type, String provider);
 
     @Query("UPDATE identity" +
             " SET password = :password, auth_type = :auth_type" +

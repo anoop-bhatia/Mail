@@ -150,7 +150,32 @@ public class EntityIdentity {
     public Long max_size;
     public Long last_modified; // sync
 
+    boolean isGmailApi() {
+        return (auth_type != null && auth_type == ServiceAuthenticator.AUTH_TYPE_GMAIL) ||
+                (EntityAccount.isGmailHost(host) && GmailState.isApiState(password));
+    }
+
+    boolean isZohoApi() {
+        return (auth_type != null && auth_type == ServiceAuthenticator.AUTH_TYPE_ZOHO) ||
+                ZohoState.isApiState(password);
+    }
+
+    boolean isGraphApi() {
+        return (auth_type != null && auth_type == ServiceAuthenticator.AUTH_TYPE_GRAPH_API);
+    }
+
+    boolean isNativeRestApi() {
+        return (isGmailApi() || isZohoApi() || isGraphApi());
+    }
+
     String getProtocol() {
+        if (isGmailApi())
+            throw new IllegalStateException("Gmail API identities do not use SMTP");
+        if (isZohoApi())
+            throw new IllegalStateException("Zoho Mail API identities do not use SMTP");
+        if (isGraphApi())
+            throw new IllegalStateException("Microsoft Graph API identities do not use SMTP");
+
         return (encryption == EmailService.ENCRYPTION_SSL ? "smtps" : "smtp");
     }
 

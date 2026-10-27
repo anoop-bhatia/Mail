@@ -172,6 +172,7 @@ public class MessageHelper {
     private boolean ensuredHeaders = false;
     private boolean ensuredStructure = false;
     private MimeMessage imessage;
+    private String diagnosticTraceId;
     private String hash = null;
     private String threadId = null;
     private InternetHeaders reportHeaders = null;
@@ -1549,11 +1550,19 @@ public class MessageHelper {
     }
 
     MessageHelper(MimeMessage message, Context context) throws IOException {
-        long cake = Helper.getAvailableStorageSpace();
-        if (cake < Helper.MIN_REQUIRED_SPACE)
-            throw new IOException(context.getString(R.string.app_cake),
-                    new ErrnoException(context.getPackageName(), ENOSPC));
+        this(message, context, true, null);
+    }
+
+    MessageHelper(MimeMessage message, Context context, boolean checkStorage,
+                  String diagnosticTraceId) throws IOException {
+        if (checkStorage) {
+            long cake = Helper.getAvailableStorageSpace();
+            if (cake < Helper.MIN_REQUIRED_SPACE)
+                throw new IOException(context.getString(R.string.app_cake),
+                        new ErrnoException(context.getPackageName(), ENOSPC));
+        }
         this.imessage = message;
+        this.diagnosticTraceId = diagnosticTraceId;
     }
 
     boolean isReport() {
@@ -3915,12 +3924,48 @@ public class MessageHelper {
         }
     }
 
+    private static class DiagnosticCountingInputStream extends FilterInputStream {
+        long count;
+
+        DiagnosticCountingInputStream(InputStream input) {
+            super(input);
+        }
+
+        @Override
+        public int read() throws IOException {
+            int value = super.read();
+            if (value >= 0)
+                count++;
+            return value;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            int read = super.read(buffer, offset, length);
+            if (read > 0)
+                count += read;
+            return read;
+        }
+    }
+
     class MessageParts {
         private String protected_subject;
         private List<PartHolder> text = new ArrayList<>();
         private List<PartHolder> extra = new ArrayList<>();
         private List<AttachmentPart> attachments = new ArrayList<>();
         private ArrayList<String> warnings = new ArrayList<>();
+
+        int getDiagnosticWarningCount() {
+            return warnings.size();
+        }
+
+        int getDiagnosticPlainMultipartFallbackCount() {
+            int count = 0;
+            for (String warning : warnings)
+                if (ZohoApiDiagnostics.isPlainMultipartFallbackWarning(warning))
+                    count++;
+            return count;
+        }
 
         String getProtectedSubject() {
             return protected_subject;
@@ -4004,6 +4049,70 @@ public class MessageHelper {
             return size;
         }
 
+        private List<PartHolder> selectRendererParts(boolean plain_text) {
+            List<PartHolder> parts = new ArrayList<>();
+            Integer plain = isPlainOnly();
+            if (plain != null && (plain & 1) != 0)
+                parts.addAll(text);
+            else {
+                boolean hasPlain = (plain != null && (plain & 0x80) != 0);
+                for (PartHolder h : text)
+                    if (plain_text && hasPlain) {
+                        if (h.isPlainText())
+                            parts.add(h);
+                    } else if (h.isHtml())
+                        parts.add(h);
+            }
+            for (PartHolder part : extra)
+                if (!part.isMarkdown() || text.isEmpty())
+                    parts.add(part);
+            return parts;
+        }
+
+        void logZohoDiagnostics(Context context, String traceId, boolean plain_text)
+                throws MessagingException {
+            if (traceId == null || !ZohoApiDiagnostics.isTraceEnabled(context))
+                return;
+            List<PartHolder> selected = selectRendererParts(plain_text);
+            ZohoApiDiagnostics.logTrace(context, traceId, "helper_parts",
+                    "text_leaves=" + text.size() +
+                            " selected_renderer_leaves=" + selected.size() +
+                            " extra_leaves=" + extra.size() +
+                            " attachment_leaves=" + attachments.size() +
+                            " plain_only=" + (isPlainOnly() == null ? -1 : isPlainOnly()) +
+                            " plain_requested=" + plain_text +
+                            " fallback_warnings=" + getDiagnosticPlainMultipartFallbackCount());
+            for (int i = 0; i < text.size(); i++) {
+                PartHolder holder = text.get(i);
+                String classification = (holder.isPlainText() ? "plain" :
+                        (holder.isHtml() ? "html" : "other"));
+                ZohoApiDiagnostics.logTracePart(context, traceId, "helper_leaf",
+                        "body/" + i, i, text.size(), holder.part.getClass().getSimpleName(),
+                        holder.part.getContentType(), holder.part.getDisposition(),
+                        classification, holder.part.getSize(), -1, "unread",
+                        selected.contains(holder));
+            }
+            for (int i = 0; i < extra.size(); i++) {
+                PartHolder holder = extra.get(i);
+                ZohoApiDiagnostics.logTracePart(context, traceId, "helper_leaf",
+                        "extra/" + i, i, extra.size(), holder.part.getClass().getSimpleName(),
+                        holder.part.getContentType(), holder.part.getDisposition(), "other",
+                        holder.part.getSize(), -1, "unread", selected.contains(holder));
+            }
+            for (int i = 0; i < attachments.size(); i++) {
+                AttachmentPart holder = attachments.get(i);
+                EntityAttachment attachment = holder.attachment;
+                boolean resource = (attachment != null && (attachment.related ||
+                        !TextUtils.isEmpty(attachment.cid) ||
+                        Part.INLINE.equalsIgnoreCase(attachment.disposition)));
+                ZohoApiDiagnostics.logTracePart(context, traceId, "helper_leaf",
+                        "attachment/" + i, i, attachments.size(), holder.part.getClass().getSimpleName(),
+                        holder.part.getContentType(), holder.disposition,
+                        (resource ? "resource" : "attachment"), holder.part.getSize(), -1,
+                        "unread", false);
+            }
+        }
+
         String getHtml(Context context) throws MessagingException, IOException {
             return getHtml(context, false);
         }
@@ -4013,38 +4122,22 @@ public class MessageHelper {
         }
 
         String getHtml(Context context, boolean plain_text, String override) throws MessagingException, IOException {
+            return getHtml(context, plain_text, override, null);
+        }
+
+        String getHtml(Context context, boolean plain_text, String override,
+                       String traceId) throws MessagingException, IOException {
             if (text.size() + extra.size() == 0) {
                 Log.i("No body part");
                 return null;
             }
 
             StringBuilder sb = new StringBuilder();
-
-            List<PartHolder> parts = new ArrayList<>();
-
-            Integer plain = isPlainOnly();
-            if (plain != null && (plain & 1) != 0)
-                // Plain only
-                parts.addAll(text);
-            else {
-                // Either plain and HTML or HTML only
-                boolean hasPlain = (plain != null && (plain & 0x80) != 0);
-                for (PartHolder h : text)
-                    if (plain_text && hasPlain) {
-                        if (h.isPlainText())
-                            parts.add(h);
-                    } else {
-                        if (h.isHtml())
-                            parts.add(h);
-                    }
-            }
-
-            for (PartHolder part : extra)
-                if (!part.isMarkdown() || text.isEmpty())
-                    parts.add(part);
+            List<PartHolder> parts = selectRendererParts(plain_text);
 
             boolean first = true;
-            for (PartHolder h : parts) {
+            for (int rendererIndex = 0; rendererIndex < parts.size(); rendererIndex++) {
+                PartHolder h = parts.get(rendererIndex);
 /*
                 int size = h.part.getSize();
                 if (size > 100 * 1024 * 1024)
@@ -4075,7 +4168,7 @@ public class MessageHelper {
                 if (UnknownCharsetProvider.charsetForMime(charset) == null)
                     warnings.add(context.getString(R.string.title_no_charset, charset));
 
-                if (TextUtils.isEmpty(charset) ||
+                if (charset == null || charset.length() == 0 ||
                         charset.equalsIgnoreCase(StandardCharsets.US_ASCII.name()))
                     charset = null;
 
@@ -4103,6 +4196,14 @@ public class MessageHelper {
                         content = h.part.getContent();
 
                     Log.i("Content class=" + (content == null ? null : content.getClass().getName()));
+                    if (traceId != null)
+                        ZohoApiDiagnostics.logTracePart(context, traceId, "renderer_leaf",
+                                "body/" + rendererIndex, rendererIndex, parts.size(),
+                                h.part.getClass().getSimpleName(), h.part.getContentType(),
+                                h.part.getDisposition(),
+                                (h.isPlainText() ? "plain" : (h.isHtml() ? "html" : "other")),
+                                h.part.getSize(), (content instanceof String ? ((String) content).length() : -1),
+                                ZohoApiDiagnostics.contentClass(content), true);
 
                     if (content == null) {
                         warnings.add(context.getString(R.string.title_no_body));
@@ -4125,11 +4226,17 @@ public class MessageHelper {
                         if (content instanceof Multipart) {
                             m.append("multipart");
                             Multipart mp = (Multipart) content;
+                            int matchedChildren = 0;
+                            int selectedChild = -1;
                             for (int i = 0; i < mp.getCount(); i++) {
                                 BodyPart bp = mp.getBodyPart(i);
+                                boolean matches = false;
                                 try {
                                     ContentType ct = new ContentType(bp.getContentType());
-                                    if (h.contentType.match(ct)) {
+                                    matches = h.contentType.match(ct);
+                                    if (matches) {
+                                        matchedChildren++;
+                                        selectedChild = i;
                                         String _charset = ct.getParameter("charset");
                                         Charset _cs = (TextUtils.isEmpty(_charset)
                                                 ? StandardCharsets.ISO_8859_1
@@ -4139,20 +4246,57 @@ public class MessageHelper {
                                 } catch (Throwable ex) {
                                     Log.w(ex);
                                 }
-                                m.append(" [").append(bp.getContentType()).append("]");
+                                String childType = (traceId == null ? bp.getContentType() :
+                                        ZohoApiDiagnostics.safeContentType(bp.getContentType()));
+                                m.append(" [").append(childType).append("]");
+                                if (traceId != null)
+                                    ZohoApiDiagnostics.logTracePart(context, traceId,
+                                            "renderer_match", "body/" + rendererIndex + "/" + i,
+                                            i, mp.getCount(), bp.getClass().getSimpleName(),
+                                            bp.getContentType(), bp.getDisposition(),
+                                            (bp.isMimeType("text/plain") ? "plain" :
+                                                    (bp.isMimeType("text/html") ? "html" : "other")),
+                                            bp.getSize(), -1, "unread", matches);
                             }
+                            if (traceId != null)
+                                ZohoApiDiagnostics.logTrace(context, traceId, "renderer_match",
+                                        "renderer_index=" + rendererIndex +
+                                                " parent_content_class=Multipart" +
+                                                " matching_children=" + matchedChildren +
+                                                " selected_child=" + selectedChild +
+                                                " match_rule=ContentType.match" +
+                                                " selection=last_matching_child");
                         } else
                             m.append(content.getClass().getName());
 
-                        String msg = "Expected " + h.contentType + " got " + m + " result=" + (result != null);
+                        String expectedType = (traceId == null ? h.contentType.toString() :
+                                ZohoApiDiagnostics.safeContentType(h.contentType.toString()));
+                        String msg = "Expected " + expectedType + " got " + m + " result=" + (result != null);
 
                         if (result == null) {
                             Log.e(msg);
                             warnings.add(msg);
-                            result = Helper.readStream(h.part.getInputStream(),
-                                    cs == null ? StandardCharsets.ISO_8859_1 : cs);
-                        } else
+                            if (traceId != null) {
+                                DiagnosticCountingInputStream input = new DiagnosticCountingInputStream(
+                                        h.part.getInputStream());
+                                result = Helper.readStream(input,
+                                        cs == null ? StandardCharsets.ISO_8859_1 : cs);
+                                ZohoApiDiagnostics.logTrace(context, traceId, "renderer_fallback",
+                                        "renderer_index=" + rendererIndex +
+                                                " fallback_used=true source_bytes=" + input.count +
+                                                " decoded_chars=" + result.length() +
+                                                " outcome=read_parent_stream");
+                            } else
+                                result = Helper.readStream(h.part.getInputStream(),
+                                        cs == null ? StandardCharsets.ISO_8859_1 : cs);
+                        } else {
+                            if (traceId != null)
+                                ZohoApiDiagnostics.logTrace(context, traceId, "renderer_fallback",
+                                        "renderer_index=" + rendererIndex +
+                                                " fallback_used=false source_bytes=0" +
+                                                " outcome=matched_child");
                             Log.w(msg);
+                        }
                     }
                 } catch (DecodingException | UnsupportedEncodingException ex) {
                     Log.e(ex);
@@ -5281,7 +5425,7 @@ public class MessageHelper {
                     } else if ("signed-receipt".equalsIgnoreCase(smimeType)) {
                         // https://datatracker.ietf.org/doc/html/rfc2634#section-2
                     } else {
-                        if (TextUtils.isEmpty(smimeType)) {
+                        if (smimeType == null || smimeType.length() == 0) {
                             String xmailer = imessage.getHeader("X-Mailer", null);
                             if (xmailer != null && xmailer.contains("Kerio Outlook Connector")) {
                                 Object content = tryParseMultipart(part.getInputStream(), part.getContentType());
@@ -5344,7 +5488,9 @@ public class MessageHelper {
 
     private void getMessageParts(Part parent, Part part, MessageParts parts, Integer encrypt) throws IOException, MessagingException {
         try {
-            Log.d("Part class=" + part.getClass() + " type=" + part.getContentType());
+            String diagnosticType = (diagnosticTraceId == null ? part.getContentType() :
+                    ZohoApiDiagnostics.safeContentType(part.getContentType()));
+            Log.d("Part class=" + part.getClass() + " type=" + diagnosticType);
 
             try {
                 ContentType ct = new ContentType(part.getContentType());
@@ -5404,7 +5550,7 @@ public class MessageHelper {
                     if (multipart instanceof MimeMultipart &&
                             Boolean.parseBoolean(System.getProperty("fairemail.preamble"))) {
                         String preamble = ((MimeMultipart) multipart).getPreamble();
-                        if (!TextUtils.isEmpty(preamble)) {
+                        if (preamble != null && preamble.length() > 0) {
                             ContentType plain = new ContentType("text/plain; preamble=\"true\"");
                             parts.extra.add(new PartHolder(part, plain));
                         }
@@ -5450,7 +5596,7 @@ public class MessageHelper {
                             String name = filename.substring(q2 + 1)
                                     .replace("+", "%2B");
 
-                            if (!TextUtils.isEmpty(charset))
+                            if (charset != null && charset.length() > 0)
                                 filename = URLDecoder.decode(name, charset);
                         } catch (Throwable ex) {
                             Log.e(ex);
@@ -5490,7 +5636,7 @@ public class MessageHelper {
                     !Part.ATTACHMENT.equalsIgnoreCase(disposition) &&
                     (size <= MAX_MESSAGE_SIZE || size == Integer.MAX_VALUE)) {
                 parts.text.add(new PartHolder(part, contentType));
-                if ("text/plain".equalsIgnoreCase(ct) && !TextUtils.isEmpty(filename))
+                if ("text/plain".equalsIgnoreCase(ct) && filename != null && filename.length() > 0)
                     attach = true;
             } else
                 attach = true;
@@ -5505,8 +5651,8 @@ public class MessageHelper {
                 }
 
                 if (("text/plain".equalsIgnoreCase(ct) || "text/html".equalsIgnoreCase(ct)) &&
-                        TextUtils.isEmpty(Helper.getExtension(filename))) {
-                    if (TextUtils.isEmpty(filename))
+                        (Helper.getExtension(filename) == null || Helper.getExtension(filename).length() == 0)) {
+                    if (filename == null || filename.length() == 0)
                         filename = "body";
                     if ("text/plain".equalsIgnoreCase(ct))
                         filename += ".txt";
@@ -5537,7 +5683,7 @@ public class MessageHelper {
                 try {
                     if (apart.part instanceof IMAPBodyPart)
                         cid = ((IMAPBodyPart) apart.part).getContentID();
-                    if (TextUtils.isEmpty(cid)) {
+                    if (cid == null || cid.length() == 0) {
                         String[] cids = apart.part.getHeader("Content-ID");
                         if (cids != null && cids.length > 0)
                             cid = MimeUtility.unfold(cids[0]);
@@ -5568,7 +5714,7 @@ public class MessageHelper {
                 apart.attachment.encryption = apart.encrypt;
 
                 if ("text/calendar".equalsIgnoreCase(apart.attachment.type) &&
-                        TextUtils.isEmpty(apart.attachment.name))
+                        (apart.attachment.name == null || apart.attachment.name.length() == 0))
                     apart.attachment.name = "invite.ics";
 
                 if (apart.attachment.size <= 0)

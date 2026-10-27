@@ -109,37 +109,42 @@ public class ActivityError extends ActivityBase {
                         ? View.VISIBLE : View.GONE);
 
         boolean password = (auth_type == ServiceAuthenticator.AUTH_TYPE_PASSWORD);
+        boolean gmail = (EntityAccount.isGmailHost(host) ||
+                auth_type == ServiceAuthenticator.AUTH_TYPE_GMAIL);
         boolean outlook = ("outlook.office365.com".equalsIgnoreCase(host) ||
                 "smtp.office365.com".equalsIgnoreCase(host) ||
                 "imap-mail.outlook.com".equalsIgnoreCase(host) ||
                 "smtp-mail.outlook.com".equalsIgnoreCase(host));
 
-        btnPassword.setText(password && !outlook ? R.string.title_password : R.string.title_setup_oauth_authorize);
+        btnPassword.setText(gmail ? R.string.title_setup_gmail_reauthorize :
+                (password && !outlook ? R.string.title_password : R.string.title_setup_oauth_authorize));
         btnPassword.setCompoundDrawablesRelativeWithIntrinsicBounds(
                 0, 0,
-                password ? R.drawable.twotone_edit_24 : R.drawable.twotone_check_24, 0);
+                password && !gmail ? R.drawable.twotone_edit_24 : R.drawable.twotone_check_24, 0);
 
         btnPassword.setVisibility(account < 0 ? View.GONE : View.VISIBLE);
         btnPassword.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (auth_type == ServiceAuthenticator.AUTH_TYPE_GMAIL)
+                if (gmail || auth_type == ServiceAuthenticator.AUTH_TYPE_GMAIL)
                     startActivity(new Intent(ActivityError.this, ActivitySetup.class)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK)
                             .putExtra("target", "gmail")
                             .putExtra("personal", intent.getStringExtra("personal"))
-                            .putExtra("address", intent.getStringExtra("address")));
+                            .putExtra("address", intent.getStringExtra("address"))
+                            .putExtra("update", true));
                 else if (auth_type == ServiceAuthenticator.AUTH_TYPE_OAUTH) {
                     try {
                         EmailProvider eprovider = EmailProvider.getProvider(ActivityError.this, provider);
+                        EmailProvider.OAuth oauth = (eprovider.legacyOauth == null ? eprovider.oauth : eprovider.legacyOauth);
                         startActivity(new Intent(ActivityError.this, ActivitySetup.class)
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK)
                                 .putExtra("target", "oauth")
                                 .putExtra("id", eprovider.id)
                                 .putExtra("name", eprovider.description)
-                                .putExtra("privacy", eprovider.oauth.privacy)
-                                .putExtra("askAccount", eprovider.oauth.askAccount)
-                                .putExtra("askTenant", eprovider.oauth.askTenant())
+                                .putExtra("privacy", oauth.privacy)
+                                .putExtra("askAccount", oauth.askAccount)
+                                .putExtra("askTenant", oauth.askTenant())
                                 .putExtra("personal", intent.getStringExtra("personal"))
                                 .putExtra("address", intent.getStringExtra("address")));
                     } catch (Throwable ex) {
@@ -147,6 +152,18 @@ public class ActivityError extends ActivityBase {
                         startActivity(new Intent(ActivityError.this, ActivitySetup.class)
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
                     }
+                } else if (auth_type == ServiceAuthenticator.AUTH_TYPE_GRAPH_API) {
+                    startActivity(new Intent(ActivityError.this, ActivitySetup.class)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                            .putExtra("target", "oauth")
+                            .putExtra("id", GraphOAuth.LEGACY_PROVIDER_ID)
+                            .putExtra("name", getString(R.string.title_setup_graph_api))
+                            .putExtra("privacy", GraphOAuth.PRIVACY_URI)
+                            .putExtra("askAccount", true)
+                            .putExtra("graphMailApi", true)
+                            .putExtra("update", true)
+                            .putExtra("personal", intent.getStringExtra("personal"))
+                            .putExtra("address", intent.getStringExtra("address")));
                 } else if (auth_type == ServiceAuthenticator.AUTH_TYPE_GRAPH ||
                         (auth_type == ServiceAuthenticator.AUTH_TYPE_PASSWORD && outlook))
                     startActivity(new Intent(ActivityError.this, ActivitySetup.class)

@@ -105,7 +105,10 @@ public interface DaoOperation {
             " COUNT(operation.id) AS count" +
             ", SUM(CASE WHEN operation.state = 'executing' THEN 1 ELSE 0 END) AS busy" +
             " FROM operation" +
-            " WHERE operation.name = '" + EntityOperation.SEND + "'")
+            " WHERE operation.name = '" + EntityOperation.SEND + "'" +
+            " AND (operation.error IS NULL OR (operation.error <> '" +
+            EntityOperation.SEND_OUTCOME_UNKNOWN_ERROR + "' AND operation.error <> '" +
+            EntityOperation.GMAIL_SEND_OUTCOME_UNKNOWN_ERROR + "'))")
     LiveData<TupleUnsent> liveUnsent();
 
     @Query("SELECT * FROM operation ORDER BY id")
@@ -113,6 +116,9 @@ public interface DaoOperation {
 
     @Query("SELECT * FROM operation WHERE name = :name")
     List<EntityOperation> getOperations(String name);
+
+    @Query("SELECT * FROM operation WHERE account = :account ORDER BY id")
+    List<EntityOperation> getOperations(long account);
 
     @Query("SELECT * FROM operation WHERE account = :account AND name = :name")
     List<EntityOperation> getOperations(long account, String name);
@@ -125,6 +131,9 @@ public interface DaoOperation {
 
     @Query("SELECT * FROM operation WHERE message = :message AND name = :name")
     EntityOperation getOperation(long message, String name);
+
+    @Query("SELECT * FROM operation WHERE message = :message ORDER BY id")
+    List<EntityOperation> getOperationsForMessage(long message);
 
     @Query("SELECT * FROM operation WHERE error IS NOT NULL")
     List<EntityOperation> getOperationsError();
@@ -171,12 +180,24 @@ public interface DaoOperation {
     @Query("UPDATE operation SET error = :error WHERE id = :id AND NOT (error IS :error)")
     int setOperationError(long id, String error);
 
+    @Query("UPDATE operation SET args = :args WHERE id = :id AND NOT (args IS :args)")
+    int setOperationArgs(long id, String args);
+
+    @Query("UPDATE operation SET name = :name WHERE id = :id AND NOT (name IS :name)")
+    int setOperationName(long id, String name);
+
     @Insert
     long insertOperation(EntityOperation operation);
 
     @Query("DELETE FROM operation WHERE id = :id")
     int deleteOperation(long id);
 
+    @Query("DELETE FROM operation WHERE id = :id AND args = :args")
+    int deleteOperationIfArgs(long id, String args);
+
     @Query("DELETE FROM operation WHERE folder = :folder AND name = :name")
     int deleteOperations(long folder, String name);
+
+    @Query("DELETE FROM operation WHERE account = :account AND name = :name")
+    int deleteOperationsByAccount(long account, String name);
 }

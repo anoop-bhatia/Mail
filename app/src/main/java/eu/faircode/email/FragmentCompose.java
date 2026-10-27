@@ -2309,7 +2309,7 @@ public class FragmentCompose extends FragmentBase {
             public boolean onLongClick(View v) {
                 Bundle args = new Bundle();
                 args.putBoolean("force_dialog", true);
-                onAction(R.id.action_check, args, "force");
+                onAction(R.id.action_check, args, "send:force");
                 return true;
             }
         });
@@ -5455,6 +5455,11 @@ public class FragmentCompose extends FragmentBase {
         Bundle args = new Bundle();
         args.putLong("id", working);
         args.putInt("action", action);
+        args.putBoolean("send_preflight", action == R.id.action_send ||
+                (action == R.id.action_check &&
+                        ("check".equals(reason) || "menu:send".equals(reason) ||
+                                reason.startsWith("menu:send:") || "key".equals(reason) ||
+                                "send:force".equals(reason))));
         args.putLong("account", identity == null ? -1 : identity.account);
         args.putLong("identity", identity == null ? -1 : identity.id);
         args.putString("extra", etExtra.getText().toString().trim());
@@ -7423,6 +7428,15 @@ public class FragmentCompose extends FragmentBase {
 
                     List<EntityAttachment> attachments = db.attachment().getAttachments(draft.id);
 
+                    if (args.getBoolean("send_preflight") && identity != null && identity.isZohoApi())
+                        for (EntityAttachment attachment : attachments)
+                            if (Boolean.TRUE.equals(attachment.available)) {
+                                File file = attachment.getFile(context);
+                                if (file.isFile() && file.length() == 0)
+                                    throw new IllegalArgumentException(
+                                            context.getString(R.string.title_zoho_zero_byte_attachment));
+                            }
+
                     // Get data
                     InternetAddress[] afrom = (identity == null ? null : new InternetAddress[]{new InternetAddress(identity.email, identity.name, StandardCharsets.UTF_8.name())});
                     InternetAddress[] ato = MessageHelper.dedup(MessageHelper.parseAddresses(context, to));
@@ -7702,6 +7716,9 @@ public class FragmentCompose extends FragmentBase {
                             action == R.id.action_undo ||
                             action == R.id.action_redo ||
                             action == R.id.action_check) {
+                        EntityAccount draftAccount = db.account().getAccount(draft.account);
+                        args.putBoolean("native_local_draft",
+                                draftAccount != null && draftAccount.isNativeRestApi());
                         boolean unencrypted =
                                 (!EntityMessage.PGP_ENCRYPTONLY.equals(draft.ui_encrypt) &&
                                         !EntityMessage.PGP_SIGNENCRYPT.equals(draft.ui_encrypt) &&
@@ -7888,7 +7905,8 @@ public class FragmentCompose extends FragmentBase {
                             else if (action == R.id.action_redo)
                                 mid = R.string.title_redo;
                             else
-                                mid = R.string.title_draft_saved;
+                                mid = (args.getBoolean("native_local_draft")
+                                        ? R.string.title_draft_saved_local : R.string.title_draft_saved);
                             final String msg = context.getString(mid) +
                                     (BuildConfig.DEBUG
                                             ? " " + draft.revision + (dirty ? "*" : "")

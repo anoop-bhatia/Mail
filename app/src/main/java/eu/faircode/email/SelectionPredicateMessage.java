@@ -45,14 +45,14 @@ public class SelectionPredicateMessage extends SelectionTracker.SelectionPredica
         TupleMessageEx message = adapter.getItemForKey(key);
         if (message == null) // happens when restoring state
             return true;
+        if (message.isGmailActionPending())
+            return false;
 
         if (message.accountProtocol != EntityAccount.TYPE_IMAP)
             return true;
 
-        if (message.uid != null)
-            return true;
-
-        return false;
+        return canSelectImapMessage(message.uid != null, message.gmail_id != null,
+                message.zoho_id != null, message.graph_id != null, message.folderReadOnly);
     }
 
     @Override
@@ -64,14 +64,25 @@ public class SelectionPredicateMessage extends SelectionTracker.SelectionPredica
         TupleMessageEx message = adapter.getItemAtPosition(position);
         if (message == null) // happens when restoring state
             return true;
+        if (message.isGmailActionPending())
+            return false;
 
         if (message.accountProtocol != EntityAccount.TYPE_IMAP)
             return true;
 
-        if (message.uid != null && !message.folderReadOnly)
-            return true;
+        return canSelectImapMessage(message.uid != null, message.gmail_id != null,
+                message.zoho_id != null, message.graph_id != null, message.folderReadOnly);
+    }
 
-        return false;
+    static boolean canSelectImapMessage(boolean hasUid, boolean hasGraphId, boolean folderReadOnly) {
+        return canSelectImapMessage(hasUid, false, false, hasGraphId, folderReadOnly);
+    }
+
+    static boolean canSelectImapMessage(boolean hasUid, boolean hasGmailId,
+                                        boolean hasZohoId, boolean hasGraphId,
+                                        boolean folderReadOnly) {
+        // Provider IDs make a row selectable only; tracker keys remain local Room message IDs.
+        return (hasGmailId || (!folderReadOnly && (hasUid || hasZohoId || hasGraphId)));
     }
 
     @Override

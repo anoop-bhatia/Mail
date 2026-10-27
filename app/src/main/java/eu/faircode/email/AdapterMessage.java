@@ -1362,9 +1362,12 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             // Selected / disabled
             view.setActivated(selectionTracker != null && selectionTracker.isSelected(message.id));
             view.setAlpha(
-                    (EntityFolder.OUTBOX.equals(message.folderType)
+                    (message.isGmailActionPending() ||
+                            (EntityFolder.OUTBOX.equals(message.folderType)
                             ? message.identitySynchronize == null || !message.identitySynchronize
-                            : message.accountProtocol == EntityAccount.TYPE_IMAP && (message.uid == null || message.ui_deleted))
+                            : message.accountProtocol == EntityAccount.TYPE_IMAP &&
+                                    (message.uid == null && message.gmail_id == null && message.zoho_id == null &&
+                                            message.graph_id == null || message.ui_deleted)))
                             ? Helper.LOW_LIGHT : 1.0f);
 
             // Duplicate
@@ -2068,7 +2071,11 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             if (csl == null || csl.getColorForState(new int[0], 0) != tint)
                 ibFlagged.setImageTintList(ColorStateList.valueOf(tint));
 
-            ibFlagged.setEnabled(message.uid != null || message.accountProtocol != EntityAccount.TYPE_IMAP);
+            ibFlagged.setEnabled(message.graph_id != null
+                    ? !message.folderReadOnly
+                    : (MessageSelectionCapabilities.canQueueZohoReadFlag(
+                                    message.zoho_id != null, message.folderReadOnly) ||
+                            message.uid != null || message.accountProtocol != EntityAccount.TYPE_IMAP));
 
             boolean split = (viewType != ViewType.THREAD && properties.getValue("split", message.id));
 
@@ -2274,39 +2281,54 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 @Override
                 public void onChanged(@Nullable List<EntityAttachment> attachments) {
                     int inlineImages = 0;
+                    int gmailCidAvailable = 0;
                     int embeddedMessages = 0;
                     if (attachments != null)
                         for (EntityAttachment attachment : attachments)
-                            if (attachment.available)
-                                if (attachment.isInline() && attachment.isImage())
+                            if (attachment.available) {
+                                boolean gmailCidImage =
+                                        NativeApiContentOperations.isAvailableGmailCidImage(message, attachment);
+                                if ((attachment.isInline() && attachment.isImage()) || gmailCidImage) {
                                     inlineImages++;
-                                else {
+                                    if (gmailCidImage)
+                                        gmailCidAvailable++;
+                                } else {
                                     String mimeType = attachment.getMimeType();
                                     if ("text/x-amp-html".equals(mimeType) ||
                                             "message/rfc822".equals(mimeType))
                                         embeddedMessages++;
                                 }
+                            }
 
                     int lastInlineImages = 0;
+                    int lastGmailCidAvailable = 0;
                     int lastEmbeddedMessages = 0;
                     List<EntityAttachment> lastAttachments = properties.getAttachments(message.id);
                     if (lastAttachments != null)
                         for (EntityAttachment attachment : lastAttachments)
-                            if (attachment.available)
-                                if (attachment.isInline() && attachment.isImage())
+                            if (attachment.available) {
+                                boolean gmailCidImage =
+                                        NativeApiContentOperations.isAvailableGmailCidImage(message, attachment);
+                                if ((attachment.isInline() && attachment.isImage()) || gmailCidImage) {
                                     lastInlineImages++;
-                                else {
+                                    if (gmailCidImage)
+                                        lastGmailCidAvailable++;
+                                } else {
                                     String mimeType = attachment.getMimeType();
                                     if ("text/x-amp-html".equals(mimeType) ||
                                             "message/rfc822".equals(mimeType))
                                         lastEmbeddedMessages++;
                                 }
+                            }
 
                     boolean show_images = properties.getValue("images", message.id);
                     boolean inline = prefs.getBoolean("inline_images", false);
                     if (embeddedMessages > lastEmbeddedMessages ||
-                            (inlineImages > lastInlineImages && (show_images || inline)))
+                            (inlineImages > lastInlineImages && (show_images || inline))) {
+                        if (gmailCidAvailable > lastGmailCidAvailable)
+                            NativeApiDiagnostics.logGmailCidRedraw(context, gmailCidAvailable);
                         bindBody(message, false);
+                    }
 
                     bindAttachments(message, attachments, true, true);
 
@@ -2359,6 +2381,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     boolean hasInbox = false;
                     boolean hasArchive = false;
                     boolean hasTrash = false;
+                    boolean hasJunk = false;
                     if (data.folders != null)
                         for (EntityFolder folder : data.folders)
                             if (folder.selectable)
@@ -2368,6 +2391,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                                     hasArchive = true;
                                 else if (EntityFolder.TRASH.equals(folder.type))
                                     hasTrash = true;
+                                else if (EntityFolder.JUNK.equals(folder.type))
+                                    hasJunk = true;
 
                     boolean pop = (message.accountProtocol == EntityAccount.TYPE_POP);
                     boolean imap = (message.accountProtocol == EntityAccount.TYPE_IMAP);
@@ -2378,15 +2403,34 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     boolean inTrash = EntityFolder.TRASH.equals(message.folderType);
                     boolean inJunk = EntityFolder.JUNK.equals(message.folderType);
                     boolean outbox = EntityFolder.OUTBOX.equals(message.folderType);
-
-                    boolean move = !(message.folderReadOnly || message.uid == null);
-                    boolean archive = (move && (hasArchive && !inArchive && !inTrash && !inJunk));
-                    boolean trash = (move || outbox || debug || pop);
-                    boolean inbox = (move && hasInbox && (inArchive || inTrash || inJunk) && imap) ||
+                    boolean gmail = (data.isGmail && message.gmail_id != null);
+                    boolean gmailDraft = (EntityFolder.DRAFTS.equals(message.folderType) ||
+                            GmailLabelFolder.hasLabel(message.labels, "DRAFT"));
+                    boolean gmailWritableMessage = (gmail && !gmailDraft);
+                    boolean gmailMoveAllowed = MessageSelectionCapabilities.canMoveFromGmailSource(
+                            gmail, inSent);
+                    boolean graph = (message.graph_id != null);
+                    boolean zoho = (message.zoho_id != null);
+                    boolean zohoWritable = MessageSelectionCapabilities.canQueueZohoReadFlag(
+                            zoho, message.folderReadOnly);
+                    boolean move = (gmailWritableMessage || (!message.folderReadOnly &&
+                            (message.uid != null || graph || zoho)));
+                    boolean folderMove = (move && gmailMoveAllowed);
+                    boolean archive = (folderMove && (hasArchive && !inArchive && !inTrash && !inJunk) &&
+                            (!gmail || GmailLabelFolder.hasLabel(message.labels, "INBOX")));
+                    GmailTrashDeleteAction.Presentation gmailTrashAction = GmailTrashDeleteAction.resolve(
+                            gmail, message.gmail_id != null,
+                            gmailWritableMessage && move, hasTrash, inTrash || inJunk);
+                    boolean trash = (gmail ? gmailTrashAction.visible :
+                            (graph ? move && (hasTrash || inTrash || inJunk) :
+                            (zoho ? move && (hasTrash || inTrash || inJunk) :
+                            (!message.isNativeRestMessage() && (move || outbox || debug || pop)))));
+                    boolean inbox = (folderMove && hasInbox && (inArchive || inTrash || inJunk || (gmailWritableMessage && !inInbox)) &&
+                            (imap || gmail)) ||
                             (pop && message.accountLeaveDeleted && inTrash);
                     boolean keywords = (message.uid != null || pop);
-                    boolean labels = (data.isGmail && move && !inTrash && !inJunk && !outbox);
-                    boolean seen = (message.uid != null || pop);
+                    boolean labels = (gmailWritableMessage && move && !inTrash && !inJunk && !outbox);
+                    boolean seen = (gmail || message.uid != null || pop || graph && move || zohoWritable);
 
                     int froms = (message.from == null ||
                             message.from.length == 0 ||
@@ -2397,11 +2441,25 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                             TextUtils.isEmpty(((InternetAddress) message.to[0]).getAddress())
                             ? 0 : message.to.length);
 
-                    boolean delete = (inTrash || !hasTrash || inJunk || outbox || message.uid == null || pop);
-                    boolean forever = (delete && (!pop || !message.accountLeaveDeleted));
-                    boolean report = (pop ? inInbox : !inJunk && move && !inSent);
-                    boolean headers = (message.uid != null || (pop && message.headers != null));
-                    boolean raw = (message.uid != null ||
+                    boolean delete = (gmail
+                            ? gmailTrashAction.permanent
+                            : ((graph || zoho)
+                                    ? move && (inTrash || inJunk)
+                                    : (!message.isNativeRestMessage() &&
+                                                    (inTrash || !hasTrash || inJunk || outbox ||
+                                                            message.uid == null || pop))));
+                    boolean nativePermanentDelete = ((graph || zoho) && move && (inTrash || inJunk));
+                    boolean forever = (gmail ? gmailTrashAction.permanent :
+                            (delete && (!pop || !message.accountLeaveDeleted)));
+                    boolean report = (gmail
+                            ? MessageSelectionCapabilities.canReportGmailSpam(true, gmailWritableMessage,
+                                    true, hasJunk, inSent, inJunk, gmailDraft)
+                            : (graph ? hasJunk && !inJunk && move && !inSent :
+                            (pop ? inInbox : (zoho ? hasJunk && !inJunk && move && !inSent :
+                                    !inJunk && move && !inSent))));
+                    boolean headers = MessageSelectionCapabilities.canShowHeaders(
+                            message.uid != null, message.isNativeRestMessage(), pop, message.headers);
+                    boolean raw = (message.uid != null || (graph && Boolean.TRUE.equals(message.raw)) ||
                             (EntityFolder.INBOX.equals(message.folderType) &&
                                     message.accountProtocol == EntityAccount.TYPE_POP));
 
@@ -2456,6 +2514,15 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     ibTrash.setImageResource(forever ? R.drawable.twotone_delete_forever_24 : R.drawable.twotone_delete_24);
                     ibTrash.setImageTintList(ColorStateList.valueOf(outbox ? colorWarning : colorControlNormal));
                     ibTrashBottom.setImageResource(forever ? R.drawable.twotone_delete_forever_24 : R.drawable.twotone_delete_24);
+                    int trashDescription = (gmail ? gmailTrashAction.label :
+                            (nativePermanentDelete
+                                    ? R.string.title_delete_permanently : R.string.title_trash));
+                    ibTrash.setContentDescription(context.getString(trashDescription));
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                        ibTrash.setTooltipText(ibTrash.getContentDescription());
+                    int trashBottomDescription = ((gmail && gmailTrashAction.permanent) || nativePermanentDelete
+                            ? R.string.title_delete_permanently : R.string.title_trash_conversation);
+                    ibTrashBottom.setContentDescription(context.getString(trashBottomDescription));
                     ibInbox.setImageResource(inJunk ? R.drawable.twotone_report_off_24 : R.drawable.twotone_inbox_24);
 
                     ibUndo.setVisibility(outbox ? View.VISIBLE : View.GONE);
@@ -2478,14 +2545,14 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     ibFullScreen.setVisibility(tools && full && button_full_screen && message.content ? View.VISIBLE : View.GONE);
                     ibForceLight.setVisibility(tools && (full || experiments) && dark && button_force_light && message.content ? View.VISIBLE : View.GONE);
                     ibForceLight.setImageLevel((full && !canDarken) || force_light ? 1 : 0);
-                    ibImportance.setVisibility(tools && button_importance && !outbox && seen ? View.VISIBLE : View.GONE);
+                    ibImportance.setVisibility(tools && button_importance && !outbox && seen && !graph && !zoho ? View.VISIBLE : View.GONE);
                     ibHide.setVisibility(tools && button_hide && !outbox ? View.VISIBLE : View.GONE);
                     ibSeen.setVisibility(tools && button_seen && !outbox && seen ? View.VISIBLE : View.GONE);
                     ibNotes.setVisibility(tools && button_notes && !outbox ? View.VISIBLE : View.GONE);
                     ibLabels.setVisibility(tools && labels_header && labels && button_labels ? View.VISIBLE : View.GONE);
                     ibKeywords.setVisibility(tools && button_keywords && keywords ? View.VISIBLE : View.GONE);
-                    ibCopy.setVisibility(tools && button_copy && move ? View.VISIBLE : View.GONE);
-                    ibMove.setVisibility(tools && button_move && move ? View.VISIBLE : View.GONE);
+                    ibCopy.setVisibility(tools && button_copy && move && !graph && !zoho ? View.VISIBLE : View.GONE);
+                    ibMove.setVisibility(tools && button_move && folderMove ? View.VISIBLE : View.GONE);
                     ibArchive.setVisibility(tools && button_archive && archive ? View.VISIBLE : View.GONE);
                     ibTrash.setVisibility(outbox || (tools && button_trash && trash) ? View.VISIBLE : View.GONE);
                     ibJunk.setVisibility(tools && button_junk && report ? View.VISIBLE : View.GONE);
@@ -3020,6 +3087,9 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             boolean show_full = properties.getValue("full", message.id);
             boolean show_images = properties.getValue("images", message.id);
             boolean show_quotes = properties.getValue("quotes", message.id);
+            // Keep Zoho embedding and Full HTML WebView configuration on the current preference.
+            final boolean inline = NativeApiContentOperations.getInlineImagesPreference(
+                    message, prefs.getBoolean("inline_images", false), AdapterMessage.this.inline);
 
             boolean always_images = prefs.getBoolean("html_always_images", false);
             if (always_images && show_full) {
@@ -3215,15 +3285,31 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
                     File file = message.getFile(context);
                     if (!file.exists()) {
+                        EntityAccount account = db.account().getAccount(message.account);
+                        boolean nativeRest = NativeApiContentOperations.supportsAccount(account);
+                        boolean bodyQueued = false;
                         try {
                             db.beginTransaction();
 
                             db.message().resetMessageContent(message.id);
-                            EntityOperation.queue(context, message, EntityOperation.BODY);
+                            message.content = false;
+                            if (nativeRest)
+                                bodyQueued = NativeApiContentOperations.queueBodyOnOpen(context, db, account,
+                                        db.folder().getFolder(message.folder), message);
+                            else
+                                EntityOperation.queue(context, message, EntityOperation.BODY);
 
                             db.setTransactionSuccessful();
                         } finally {
                             db.endTransaction();
+                        }
+
+                        // The initial expansion wake may have run before this stale-cache
+                        // fallback inserted BODY. Wake native REST accounts after commit.
+                        if (nativeRest) {
+                            NativeApiDiagnostics.logBodyCacheMiss(context,
+                                    NativeApiContentOperations.providerFor(account), bodyQueued);
+                            ServiceSynchronize.eval(context, message.account, "native body cache missing");
                         }
 
                         return null;
@@ -3281,7 +3367,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                                 Log.e(ex);
                             }
 
-                    HtmlHelper.removeRelativeLinks(document);
+                    HtmlHelper.removeRelativeLinks(document, message, attachments);
 
                     // Check for inline encryption
                     boolean iencrypted = HtmlHelper.contains(document, new String[]{
@@ -3293,9 +3379,17 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     // Check for images
                     boolean has_images = false;
                     for (Element img : document.select("img")) {
+                        String source = img.attr("src");
                         if (inline) {
-                            String src = img.attr("src");
-                            if (!src.startsWith("cid:")) {
+                            if ((!source.startsWith("cid:") &&
+                                    !NativeApiContentOperations.hasZohoInlineImageReference(
+                                            message, attachments, source)) ||
+                                    NativeApiContentOperations.hasUncachedGmailInlineImage(
+                                            message, attachments, source) ||
+                                    NativeApiContentOperations.hasUncachedGraphInlineImage(
+                                            message, attachments, source) ||
+                                    NativeApiContentOperations.hasUncachedZohoInlineImage(
+                                            message, attachments, source)) {
                                 has_images = true;
                                 break;
                             }
@@ -3304,22 +3398,96 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                             break;
                         }
                     }
+                    boolean fetchGraphCidImage = false;
+                    if (!show_full && inline)
+                        for (Element img : document.select("img"))
+                            if (NativeApiContentOperations.shouldFetchGraphCidImagesOnOpen(
+                                    message, attachments, img.attr("src"), show_full, inline)) {
+                                fetchGraphCidImage = true;
+                                break;
+                            }
+                    boolean fetchZohoCidImage = false;
+                    if (!show_full && inline)
+                        for (Element img : document.select("img"))
+                            if (NativeApiContentOperations.shouldFetchZohoCidImagesOnOpen(
+                                    message, attachments, img.attr("src"), show_full, inline, show_images)) {
+                                fetchZohoCidImage = true;
+                                break;
+                            }
                     args.putBoolean("has_images", has_images);
 
-                    // Download inline images
-                    if (show_images)
+                    // Download inline images. Gmail API CID bytes may be deferred to a separate
+                    // attachment request; fetch them for normal body rendering when inline images
+                    // are enabled. Graph CID render resources use the same selected-file route;
+                    // ordinary Graph file attachments remain tap-to-download only.
+                    boolean fetch_inline_images = (show_images ||
+                            (!show_full && inline && !TextUtils.isEmpty(message.gmail_id)) ||
+                            fetchGraphCidImage || fetchZohoCidImage);
+                    boolean wakeGmailCidImage = false;
+                    boolean wakeGraphCidImage = false;
+                    boolean wakeZohoCidImage = false;
+                    int queuedGmailCidImages = 0;
+                    if (fetch_inline_images)
                         try {
                             db.beginTransaction();
 
-                            for (EntityAttachment attachment : attachments)
-                                if (attachment.isInline() && attachment.isImage() &&
-                                        attachment.progress == null && !attachment.available)
+                            for (EntityAttachment attachment : attachments) {
+                                boolean gmailCidImage =
+                                        NativeApiContentOperations.isGmailApiCidImage(message, attachment);
+                                boolean graphCidImage =
+                                        NativeApiContentOperations.isGraphApiCidImage(message, attachment);
+                                boolean zohoCidImage =
+                                        NativeApiContentOperations.isZohoApiCidImage(message, attachment);
+                                boolean graphCidReferenced = show_images;
+                                if (graphCidImage && !graphCidReferenced && fetchGraphCidImage)
+                                    for (Element img : document.select("img"))
+                                        if (NativeApiContentOperations.matchesGraphCidReference(
+                                                message, attachment, img.attr("src"))) {
+                                            graphCidReferenced = true;
+                                            break;
+                                        }
+                                boolean zohoCidReferenced = show_images;
+                                if (zohoCidImage && !zohoCidReferenced && fetchZohoCidImage)
+                                    for (Element img : document.select("img"))
+                                        if (NativeApiContentOperations.matchesZohoCidReference(
+                                                message, attachment, img.attr("src"))) {
+                                            zohoCidReferenced = true;
+                                            break;
+                                        }
+                                boolean selectedInline = (message.zoho_id != null
+                                        ? zohoCidImage && zohoCidReferenced
+                                        : attachment.isInline() || gmailCidImage || graphCidImage);
+                                if (selectedInline &&
+                                        (!graphCidImage || graphCidReferenced) &&
+                                        attachment.isImage() &&
+                                        attachment.progress == null && !attachment.available) {
+                                    wakeGmailCidImage |=
+                                            NativeApiContentOperations.shouldWakeForGmailCidImageRequest(
+                                                    message, attachment);
+                                    wakeGraphCidImage |=
+                                            NativeApiContentOperations.shouldWakeForGraphCidImageRequest(
+                                                    message, attachment);
+                                    wakeZohoCidImage |=
+                                            NativeApiContentOperations.shouldWakeForZohoCidImageRequest(
+                                                    message, attachment);
                                     EntityOperation.queue(context, message, EntityOperation.ATTACHMENT, attachment.id);
+                                    if (gmailCidImage)
+                                        queuedGmailCidImages++;
+                                }
+                            }
 
                             db.setTransactionSuccessful();
                         } finally {
                             db.endTransaction();
                         }
+                    if (queuedGmailCidImages > 0)
+                        NativeApiDiagnostics.logGmailCidQueued(context, queuedGmailCidImages);
+                    if (wakeGmailCidImage)
+                        ServiceSynchronize.eval(context, message.account, "Gmail CID image request");
+                    if (wakeGraphCidImage)
+                        ServiceSynchronize.eval(context, message.account, "Graph CID image request");
+                    if (wakeZohoCidImage)
+                        ServiceSynchronize.eval(context, message.account, "Zoho CID image request");
 
                     // Check for AMP
                     boolean has_amp = false;
@@ -3374,7 +3542,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                                             "transform-origin: 0 0;");
                         }
 
-                        HtmlHelper.guessSchemes(document);
+                        HtmlHelper.guessSchemes(document, message, attachments);
                         HtmlHelper.autoLink(document);
 
                         if (message.ui_found && found && !TextUtils.isEmpty(searched))
@@ -3411,6 +3579,11 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
 
                         if (message.ui_found && found && !TextUtils.isEmpty(searched))
                             HtmlHelper.highlightSearched(tcontext, document, searched, searchedPartial);
+
+                        if (NativeApiContentOperations.shouldEmbedZohoInlineImages(
+                                message, show_images, inline))
+                            HtmlHelper.embedInlineImages(context, message.id, document,
+                                    false, show_images, inline, true);
 
                         // Cleanup message
                         document = HtmlHelper.sanitizeView(tcontext, document, show_images);
@@ -4579,6 +4752,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             final TupleMessageEx message = getMessage();
             if (message == null)
                 return;
+            if (message.isGmailActionPending())
+                return;
 
             int id = view.getId();
             if (id == R.id.ibAvatar)
@@ -4746,7 +4921,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     card.setClickable(false);
                 }
 
-                if (EntityFolder.DRAFTS.equals(message.folderType) && message.drafts == 1 &&
+                if (!message.isNativeRestMessage() && EntityFolder.DRAFTS.equals(message.folderType) && message.drafts == 1 &&
                         !EntityMessage.PGP_SIGNENCRYPT.equals(message.encrypt) &&
                         !EntityMessage.SMIME_SIGNENCRYPT.equals(message.encrypt)) {
                     context.startActivity(
@@ -4849,6 +5024,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             final TupleMessageEx message = getMessage();
             if (message == null)
                 return false;
+            if (message.isGmailActionPending())
+                return true;
 
             int id = view.getId();
             if (id == R.id.ibFlagged) {
@@ -4951,21 +5128,27 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 onMenuAlt(message);
                 return true;
             } else if (id == R.id.ibMove) {
-                if (message.folderReadOnly)
+                if (message.folderReadOnly || message.graph_id != null)
                     return false;
-                onActionMoveAccount(message, ibMove);
+                if (message.zoho_id != null)
+                    onActionMove(message, false);
+                else
+                    onActionMoveAccount(message, ibMove);
                 return true;
             } else if (id == R.id.ibMoveBottom) {
-                if (message.folderReadOnly)
+                if (message.folderReadOnly || message.graph_id != null)
                     return false;
-                onActionMoveAccount(message, ibMoveBottom);
+                if (message.zoho_id != null)
+                    onActionMove(message, false);
+                else
+                    onActionMoveAccount(message, ibMoveBottom);
                 return true;
             } else if (id == R.id.ibTrash || id == R.id.ibTrashBottom) {
-                if (message.folderReadOnly)
+                if (message.folderReadOnly && message.gmail_id == null)
                     return false;
                 if (EntityFolder.OUTBOX.equals(message.folderType))
                     return false;
-                onActionTrash(message, true);
+                onActionTrash(message, message.gmail_id == null || Boolean.TRUE.equals(ibTrash.getTag()));
                 return true;
             } else if (id == R.id.btnCalendarAccept || id == R.id.btnCalendarDecline || id == R.id.btnCalendarMaybe) {
                 onActionCalendar(message, view.getId(), true);
@@ -5012,7 +5195,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     onActionArchive(message);
                     return false;
                 case KeyEvent.KEYCODE_D:
-                    onActionTrash(message, false);
+                    onActionTrash(message,
+                            message.gmail_id != null && Boolean.TRUE.equals(ibTrash.getTag()));
                     return false;
                 case KeyEvent.KEYCODE_S:
                     if (selectionTracker == null)
@@ -5605,7 +5789,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         }
 
         private void onToggleMessage(TupleMessageEx message) {
-            if (EntityFolder.DRAFTS.equals(message.folderType) && message.visible == 1 &&
+            if (!message.isNativeRestMessage() && EntityFolder.DRAFTS.equals(message.folderType) && message.visible == 1 &&
                     !EntityMessage.PGP_SIGNENCRYPT.equals(message.encrypt) &&
                     !EntityMessage.SMIME_SIGNENCRYPT.equals(message.encrypt))
                 context.startActivity(
@@ -5713,7 +5897,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                         if (account == null)
                             return null;
 
-                        if (account.protocol == EntityAccount.TYPE_IMAP && message.uid == null)
+                        if (NativeApiContentOperations.hasMissingLegacyImapUid(account, message))
                             return null;
 
                         for (EntityAttachment attachment : db.attachment().getAttachments(message.id))
@@ -6126,6 +6310,9 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
                     boolean disable_tracking = prefs.getBoolean("disable_tracking", true);
                     boolean monospaced_pre = prefs.getBoolean("monospaced_pre", false);
+                    boolean show_images = properties.getValue("images", message.id);
+                    boolean inline_images = NativeApiContentOperations.getInlineImagesPreference(
+                            message, prefs.getBoolean("inline_images", false), AdapterMessage.this.inline);
 
                     long id = args.getLong("id");
                     File file = EntityMessage.getFile(context, id);
@@ -6136,7 +6323,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                         HtmlHelper.restorePre(document);
                     HtmlHelper.guessSchemes(document);
                     HtmlHelper.autoLink(document);
-                    HtmlHelper.embedInlineImages(context, message.id, document, true);
+                    HtmlHelper.embedInlineImages(context, message.id, document, true,
+                            show_images, inline_images);
                     HtmlHelper.markText(document);
                     if (disable_tracking)
                         HtmlHelper.removeTrackingPixels(context, document);
@@ -6206,34 +6394,61 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             Bundle args = new Bundle();
             args.putLong("id", message.id);
             args.putLong("account", message.account);
-            args.putString("self", message.folderName);
+            args.putString("self", message.gmail_id == null ? message.folderName : null);
 
-            new SimpleTask<String[]>() {
+            new SimpleTask<Bundle>() {
                 @Override
-                protected String[] onExecute(Context context, Bundle args) {
+                protected Bundle onExecute(Context context, Bundle args) {
                     long account = args.getLong("account");
-
                     DB db = DB.getInstance(context);
-                    List<EntityFolder> folders = db.folder().getFolders(account, true, true);
+                    EntityMessage current = db.message().getMessage(args.getLong("id"));
+                    if (current == null)
+                        return null;
+                    boolean gmailApi = (current.gmail_id != null);
+                    List<EntityFolder> folders = db.folder().getFolders(account, !gmailApi, true);
 
-                    List<String> result = new ArrayList<>();
-                    if (folders != null)
+                    List<String> ids = new ArrayList<>();
+                    List<String> display = new ArrayList<>();
+                    if (gmailApi) {
+                        List<GmailLabelControl.Choice> choices =
+                                GmailLabelControl.getUserLabelChoices(folders, account);
+                        Collator collator = Collator.getInstance(Locale.getDefault());
+                        collator.setStrength(Collator.SECONDARY);
+                        Collections.sort(choices, (left, right) ->
+                                collator.compare(left.displayName, right.displayName));
+                        ids.addAll(Arrays.asList(GmailLabelControl.getIds(choices)));
+                        display.addAll(Arrays.asList(GmailLabelControl.getDisplayNames(choices)));
+                    } else {
+                        List<EntityFolder> userLabels = new ArrayList<>();
+                        if (folders != null)
                         for (EntityFolder folder : folders)
                             if (EntityFolder.USER.equals(folder.type))
-                                result.add(folder.name);
+                                userLabels.add(folder);
 
-                    Collator collator = Collator.getInstance(Locale.getDefault());
-                    collator.setStrength(Collator.SECONDARY); // Case insensitive, process accents etc
-
-                    Collections.sort(result, collator);
-
-                    return result.toArray(new String[0]);
+                        Collator collator = Collator.getInstance(Locale.getDefault());
+                        collator.setStrength(Collator.SECONDARY);
+                        Collections.sort(userLabels, (left, right) -> collator.compare(left.name, right.name));
+                        for (EntityFolder label : userLabels) {
+                            ids.add(label.name);
+                            display.add(label.name);
+                        }
+                    }
+                    Bundle result = new Bundle();
+                    result.putBoolean("gmail_api", gmailApi);
+                    result.putStringArray("folders", ids.toArray(new String[0]));
+                    result.putStringArray("display", display.toArray(new String[0]));
+                    result.putStringArray("labels", current.labels);
+                    return result;
                 }
 
                 @Override
-                protected void onExecuted(Bundle args, String[] folders) {
-                    args.putStringArray("labels", message.labels);
-                    args.putStringArray("folders", folders);
+                protected void onExecuted(Bundle args, Bundle data) {
+                    if (data == null)
+                        return;
+                    args.putStringArray("labels", data.getStringArray("labels"));
+                    args.putBoolean("gmail_api", data.getBoolean("gmail_api"));
+                    args.putStringArray("folders", data.getStringArray("folders"));
+                    args.putStringArray("display", data.getStringArray("display"));
 
                     FragmentDialogLabelsManage fragment = new FragmentDialogLabelsManage();
                     fragment.setArguments(args);
@@ -6259,6 +6474,50 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         }
 
         private void onActionMove(TupleMessageEx message, final boolean copy) {
+            if (message.gmail_id != null && EntityFolder.SENT.equals(message.folderType))
+                return;
+            if (message.graph_id != null && copy)
+                return;
+            if (message.zoho_id != null && copy)
+                return;
+            if (message.gmail_id != null && copy)
+                return;
+            if (message.gmail_id != null) {
+                Bundle args = new Bundle();
+                args.putLong("account", message.account);
+                new SimpleTask<long[]>() {
+                    @Override
+                    protected long[] onExecute(Context context, Bundle args) {
+                        long accountId = args.getLong("account");
+                        DB db = DB.getInstance(context);
+                        EntityAccount account = db.account().getAccount(accountId);
+                        EntityMessage currentMessage = db.message().getMessage(message.id);
+                        EntityFolder source = (currentMessage == null ? null :
+                                db.folder().getFolder(currentMessage.folder));
+                        List<EntityFolder> folders = db.folder().getFolders(accountId, false, true);
+                        List<Long> disabled = new ArrayList<>();
+                        disabled.add(currentMessage == null ? message.folder : currentMessage.folder);
+                        if (folders != null)
+                            for (EntityFolder folder : folders)
+                                if (account == null || currentMessage == null || source == null ||
+                                        !GmailMailMutator.isValidMovePickerTarget(account, folder) ||
+                                        !GmailMailMutator.canMoveToTarget(account, source, currentMessage, folder))
+                                    disabled.add(folder.id);
+                        return Helper.toLongArray(disabled);
+                    }
+
+                    @Override
+                    protected void onExecuted(Bundle args, long[] disabled) {
+                        onActionMove(message, copy, message.account, disabled);
+                    }
+
+                    @Override
+                    protected void onException(Bundle args, Throwable ex) {
+                        Log.unexpectedError(parentFragment.getParentFragmentManager(), ex);
+                    }
+                }.execute(context, owner, args, "message:move:gmail");
+                return;
+            }
             if (message.accountProtocol == EntityAccount.TYPE_POP &&
                     EntityFolder.TRASH.equals(message.folderType) && !message.accountLeaveDeleted) {
                 Bundle args = new Bundle();
@@ -6291,6 +6550,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         private void onActionMove(TupleMessageEx message, final boolean copy, long account, long[] disabled) {
             if (parentFragment == null)
                 return;
+            if (message.gmail_id != null && EntityFolder.SENT.equals(message.folderType))
+                return;
 
             Bundle args = new Bundle();
             args.putInt("icon", copy ? R.drawable.twotone_file_copy_24 : R.drawable.twotone_drive_file_move_24);
@@ -6299,7 +6560,9 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             args.putLongArray("disabled", disabled);
             args.putLong("message", message.id);
             args.putBoolean("copy", copy);
-            args.putBoolean("cancopy", true);
+            args.putBoolean("cancopy", message.zoho_id == null && message.graph_id == null &&
+                    message.gmail_id == null);
+            args.putBoolean("gmail_api", message.gmail_id != null);
             args.putBoolean("similar", false);
 
             FragmentDialogSelectFolder fragment = new FragmentDialogSelectFolder();
@@ -6309,6 +6572,12 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         }
 
         private void onActionMoveAccount(TupleMessageEx message, View anchor) {
+            if (message.gmail_id != null && EntityFolder.SENT.equals(message.folderType))
+                return;
+            if (message.graph_id != null)
+                return;
+            if (message.zoho_id != null)
+                return;
             Bundle args = new Bundle();
 
             new SimpleTask<List<EntityAccount>>() {
@@ -6360,12 +6629,14 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         }
 
         private void onActionArchive(TupleMessageEx message) {
+            if (message.gmail_id != null && EntityFolder.SENT.equals(message.folderType))
+                return;
             properties.move(message.id, EntityFolder.ARCHIVE);
         }
 
         private void onActionTrash(TupleMessageEx message, boolean delete) {
             if (delete)
-                onActionDelete(message);
+                onActionDelete(message, false);
             else
                 properties.move(message.id, EntityFolder.TRASH);
         }
@@ -6380,6 +6651,27 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         }
 
         private void onActionDelete(TupleMessageEx message) {
+            onActionDelete(message, false);
+        }
+
+        private void onActionDelete(TupleMessageEx message, boolean explicitPermanent) {
+            onActionDelete(message, explicitPermanent, null);
+        }
+
+        private void onActionDelete(TupleMessageEx message, boolean explicitPermanent, String requestedTrace) {
+            boolean permanentFolder = MessageSelectionCapabilities.isTrashOrSpam(message.folderType);
+            boolean gmailPermanent = (message.gmail_id != null &&
+                    !EntityFolder.DRAFTS.equals(message.folderType) &&
+                    !GmailLabelFolder.hasLabel(message.labels, "DRAFT"));
+            boolean permanent = (message.isNativeRestMessage() &&
+                    (explicitPermanent || permanentFolder) &&
+                    (message.gmail_id == null || gmailPermanent));
+            String deleteTrace = (message.zoho_id != null && permanent
+                    ? ApiMutationLog.safeTraceId(requestedTrace) : null);
+            if (message.zoho_id != null && permanent && deleteTrace == null)
+                deleteTrace = ApiMutationLog.newTraceId();
+            if (message.gmail_id != null && (!gmailPermanent || !permanent))
+                return;
             boolean leaveDeleted =
                     (message.accountProtocol == EntityAccount.TYPE_POP &&
                             message.accountLeaveDeleted);
@@ -6393,14 +6685,18 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             aargs.putString("remark", message.getRemark());
             aargs.putLong("id", message.id);
             aargs.putInt("faq", 160);
-            aargs.putString("notagain", "delete_asked");
+            if (!permanent)
+                aargs.putString("notagain", "delete_asked");
+            if (deleteTrace != null)
+                aargs.putString("delete_trace", deleteTrace);
             if (!leaveDeleted)
                 aargs.putString("accept", context.getString(R.string.title_ask_delete_accept));
             aargs.putBoolean("warning", true);
+            aargs.putBoolean("permanent", permanent);
 
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
             boolean delete_asked = prefs.getBoolean("delete_asked", false);
-            if (delete_asked) {
+            if (GmailMailMutator.shouldSkipSingleDeleteConfirmation(permanent, delete_asked)) {
                 Intent data = new Intent();
                 data.putExtra("args", aargs);
                 parentFragment.onActivityResult(FragmentMessages.REQUEST_MESSAGE_DELETE, RESULT_OK, data);
@@ -6414,6 +6710,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         }
 
         private void onActionJunk(TupleMessageEx message) {
+            if (message.gmail_id != null && EntityFolder.SENT.equals(message.folderType))
+                return;
             if (message.accountProtocol == EntityAccount.TYPE_POP) {
                 Bundle aargs = new Bundle();
                 aargs.putLongArray("ids", new long[]{message.id});
@@ -6439,6 +6737,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         }
 
         private void onActionInbox(TupleMessageEx message) {
+            if (message.gmail_id != null && EntityFolder.SENT.equals(message.folderType))
+                return;
             properties.move(message.id, EntityFolder.INBOX);
         }
 
@@ -6447,6 +6747,47 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             boolean message_tools = !prefs.getBoolean("message_tools", true);
             prefs.edit().putBoolean("message_tools", message_tools).apply();
             setupTools(message, false, false);
+        }
+
+        private void onConfigureButtons(final TupleMessageEx message) {
+            Bundle args = new Bundle();
+            args.putLong("id", message.id);
+            new SimpleTask<MessageButtonCapabilities.Context>() {
+                @Override
+                protected MessageButtonCapabilities.Context onExecute(Context context, Bundle args) {
+                    DB db = DB.getInstance(context);
+                    EntityMessage current = db.message().getMessage(args.getLong("id"));
+                    if (current == null)
+                        return MessageButtonCapabilities.Context.unavailable();
+                    EntityAccount account = db.account().getAccount(current.account);
+                    EntityFolder source = db.folder().getFolder(current.folder);
+                    if (account == null || source == null)
+                        return MessageButtonCapabilities.Context.unavailable();
+                    List<EntityFolder> folders = db.folder().getFolders(account.id, false, true);
+                    return MessageButtonCapabilities.create(account, current, source, folders);
+                }
+
+                @Override
+                protected void onExecuted(Bundle args, MessageButtonCapabilities.Context capabilities) {
+                    Bundle dargs = new Bundle();
+                    dargs.putSerializable("capabilities", capabilities);
+                    FragmentDialogButtons buttons = new FragmentDialogButtons();
+                    buttons.setArguments(dargs);
+                    buttons.setTargetFragment(parentFragment, FragmentMessages.REQUEST_BUTTONS);
+                    buttons.show(parentFragment.getParentFragmentManager(), "dialog:buttons");
+                }
+
+                @Override
+                protected void onException(Bundle args, Throwable ex) {
+                    Log.unexpectedError(parentFragment.getParentFragmentManager(), ex);
+                    Bundle dargs = new Bundle();
+                    dargs.putSerializable("capabilities", MessageButtonCapabilities.Context.unavailable());
+                    FragmentDialogButtons buttons = new FragmentDialogButtons();
+                    buttons.setArguments(dargs);
+                    buttons.setTargetFragment(parentFragment, FragmentMessages.REQUEST_BUTTONS);
+                    buttons.show(parentFragment.getParentFragmentManager(), "dialog:buttons");
+                }
+            }.execute(context, owner, args, "message:button-capabilities");
         }
 
         private void onActionMore(TupleMessageEx message) {
@@ -6460,52 +6801,109 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             PopupMenuLifecycle popupMenu = new PopupMenuLifecycle(context, powner, ibMore == null ? view : ibMore);
             popupMenu.inflate(R.menu.popup_message_more);
 
+            boolean nativeRest = message.isNativeRestMessage();
+            boolean graph = (message.graph_id != null);
+            boolean graphWritable = (graph && !message.folderReadOnly);
+            boolean zoho = (message.zoho_id != null);
+            String zohoDeleteTrace = (zoho ? ApiMutationLog.newTraceId() : null);
+            boolean pop = (message.accountProtocol == EntityAccount.TYPE_POP);
+            boolean gmail = (message.gmail_id != null);
+            boolean gmailWritable = (gmail && !message.folderReadOnly);
+            boolean gmailPermanent = (gmail && !EntityFolder.DRAFTS.equals(message.folderType) &&
+                    !GmailLabelFolder.hasLabel(message.labels, "DRAFT"));
+            boolean gmailPermanentAvailable = GmailTrashDeleteAction.isPermanentDeleteMoreActionAvailable(
+                    gmail, gmailPermanent,
+                    MessageSelectionCapabilities.isTrashOrSpam(message.folderType));
+            boolean zohoWritable = MessageSelectionCapabilities.canQueueZohoReadFlag(
+                    zoho, message.folderReadOnly);
+            boolean nativeWritable = (gmailWritable || graphWritable || zohoWritable);
+            boolean legacyReadFlagWritable = (!nativeRest && !message.folderReadOnly &&
+                    (message.uid != null || message.accountProtocol != EntityAccount.TYPE_IMAP));
+
             popupMenu.getMenu().findItem(R.id.menu_unseen)
                     .setTitle(message.ui_seen ? R.string.title_unseen : R.string.title_seen)
                     .setIcon(message.ui_seen ? R.drawable.twotone_mail_24 : R.drawable.twotone_drafts_24)
-                    .setEnabled(message.uid != null ||
-                            message.accountProtocol != EntityAccount.TYPE_IMAP);
+                    .setEnabled(nativeWritable || legacyReadFlagWritable)
+                    .setVisible(MessageSelectionCapabilities.shouldShowNativeMessageMoreAction(
+                            nativeRest, nativeWritable));
 
             popupMenu.getMenu().findItem(R.id.menu_hide)
                     .setTitle(message.ui_snoozed == null ? R.string.title_hide : R.string.title_unhide)
                     .setIcon(message.ui_snoozed == null ? R.drawable.twotone_visibility_off_24 : R.drawable.twotone_visibility_24);
 
             popupMenu.getMenu().findItem(R.id.menu_flag_color)
-                    .setVisible(flags || message.ui_flagged)
-                    .setEnabled(message.uid != null ||
-                            message.accountProtocol != EntityAccount.TYPE_IMAP);
+                    .setVisible((flags || message.ui_flagged) &&
+                            MessageSelectionCapabilities.shouldShowNativeMessageMoreAction(
+                                    nativeRest, nativeWritable))
+                    .setEnabled(nativeWritable || legacyReadFlagWritable);
 
             int i = (message.importance == null ? EntityMessage.PRIORITIY_NORMAL : message.importance);
-            boolean can = (message.uid != null || message.accountProtocol == EntityAccount.TYPE_POP);
+            boolean can = (MessageSelectionCapabilities.canSetImportance(nativeRest, gmail, gmail,
+                    graph, zoho) && (nativeRest ? gmailWritable :
+                    (!message.folderReadOnly &&
+                            (message.uid != null || message.accountProtocol == EntityAccount.TYPE_POP))));
+            popupMenu.getMenu().findItem(R.id.menu_set_importance)
+                    .setVisible(MessageSelectionCapabilities.shouldShowNativeMessageMoreAction(
+                            nativeRest, can));
             popupMenu.getMenu().findItem(R.id.menu_set_importance_low).setEnabled(can && !EntityMessage.PRIORITIY_LOW.equals(i));
             popupMenu.getMenu().findItem(R.id.menu_set_importance_normal).setEnabled(can && !EntityMessage.PRIORITIY_NORMAL.equals(i));
             popupMenu.getMenu().findItem(R.id.menu_set_importance_high).setEnabled(can && !EntityMessage.PRIORITIY_HIGH.equals(i));
 
             popupMenu.getMenu().findItem(R.id.menu_edit_subject)
                     .setEnabled(message.uid != null && !message.folderReadOnly)
-                    .setVisible(message.accountProtocol == EntityAccount.TYPE_IMAP &&
+                    .setVisible(MessageSelectionCapabilities.shouldShowLegacyOnlyMessageMoreAction(nativeRest) &&
+                            message.accountProtocol == EntityAccount.TYPE_IMAP &&
                             experiments);
 
+            boolean nativeMoveWritable = ((gmailWritable && !EntityFolder.SENT.equals(message.folderType)) ||
+                    graphWritable || zohoWritable);
+            boolean legacyMoveVisible = (!nativeRest && message.accountProtocol == EntityAccount.TYPE_IMAP &&
+                    !(gmail && EntityFolder.SENT.equals(message.folderType)));
             popupMenu.getMenu().findItem(R.id.menu_move_to)
-                    .setEnabled(message.uid != null && !message.folderReadOnly)
-                    .setVisible(message.accountProtocol == EntityAccount.TYPE_IMAP);
+                    .setEnabled((gmailWritable && !EntityFolder.SENT.equals(message.folderType)) || graphWritable ||
+                            zohoWritable || (message.uid != null && !message.folderReadOnly))
+                    .setVisible(legacyMoveVisible || nativeMoveWritable);
 
             popupMenu.getMenu().findItem(R.id.menu_copy_to)
-                    .setEnabled(message.uid != null && !message.folderReadOnly)
-                    .setVisible(message.accountProtocol == EntityAccount.TYPE_IMAP);
+                    .setEnabled(!gmail && !graph && !zoho && message.uid != null && !message.folderReadOnly)
+                    .setVisible(MessageSelectionCapabilities.shouldShowLegacyOnlyMessageMoreAction(nativeRest) &&
+                            MessageSelectionCapabilities.canShowCopyTo(
+                                    graph, zoho, gmail, message.accountProtocol));
 
             popupMenu.getMenu().findItem(R.id.menu_delete_attachments)
                     .setEnabled(message.uid != null && !message.folderReadOnly)
-                    .setVisible(message.accountProtocol == EntityAccount.TYPE_IMAP && !Helper.isPlayStoreInstall());
+                    .setVisible(MessageSelectionCapabilities.shouldShowLegacyOnlyMessageMoreAction(nativeRest) &&
+                            message.accountProtocol == EntityAccount.TYPE_IMAP && !Helper.isPlayStoreInstall());
 
+            boolean deletePermanently = MessageSelectionCapabilities.shouldLabelDeletePermanentlyMenu(
+                    gmail, graph, zoho, message.folderType);
+            boolean showPermanentDeleteMore = MessageSelectionCapabilities
+                    .shouldShowPermanentDeleteMoreAction(nativeRest, message.folderType);
+            boolean deleteEnabled = (gmailPermanentAvailable || graphWritable || zohoWritable ||
+                    (!nativeRest && (message.uid == null || !message.folderReadOnly)));
+            boolean deleteVisible = (nativeRest ? (showPermanentDeleteMore &&
+                    (gmailPermanentAvailable || graphWritable || zohoWritable)) :
+                    message.accountProtocol == EntityAccount.TYPE_IMAP);
+            if (zoho)
+                ApiMutationLog.write(ApiMutationLog.formatZohoMenuGate(zohoDeleteTrace,
+                        deleteVisible, deleteEnabled, message.folderReadOnly,
+                        message.zoho_id != null, MessageSelectionCapabilities.isTrashOrSpam(message.folderType)));
             popupMenu.getMenu().findItem(R.id.menu_delete)
-                    .setEnabled(message.uid == null || !message.folderReadOnly)
-                    .setVisible(message.accountProtocol == EntityAccount.TYPE_IMAP);
+                    .setTitle(deletePermanently
+                            ? R.string.title_delete_permanently : R.string.title_delete)
+                    .setIcon(deletePermanently
+                            ? R.drawable.twotone_delete_forever_24 : R.drawable.twotone_delete_24)
+                    .setEnabled(deleteEnabled)
+                    .setVisible(deleteVisible);
 
             popupMenu.getMenu().findItem(R.id.menu_create_rule).setVisible(!message.folderReadOnly);
 
             popupMenu.getMenu().findItem(R.id.menu_manage_keywords)
-                    .setEnabled(message.uid != null || message.accountProtocol == EntityAccount.TYPE_POP);
+                    .setTitle(gmail ? R.string.title_manage_labels : R.string.title_manage_keywords)
+                    .setEnabled(gmailWritable || (!nativeRest &&
+                            (message.uid != null || message.accountProtocol == EntityAccount.TYPE_POP)))
+                    .setVisible(MessageSelectionCapabilities.shouldShowNativeMessageMoreAction(
+                            nativeRest, gmailWritable));
 
             popupMenu.getMenu().findItem(R.id.menu_search_in_text).setEnabled(message.content && !full);
             popupMenu.getMenu().findItem(R.id.menu_translate).setVisible(
@@ -6524,8 +6922,12 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             popupMenu.getMenu().findItem(R.id.menu_print).setVisible(Helper.canPrint(context));
 
             popupMenu.getMenu().findItem(R.id.menu_show_headers).setChecked(show_headers);
-            popupMenu.getMenu().findItem(R.id.menu_show_headers).setEnabled(message.uid != null ||
-                    (message.accountProtocol == EntityAccount.TYPE_POP && message.headers != null));
+            boolean canShowHeaders = MessageSelectionCapabilities.canShowHeaders(message.uid != null,
+                    nativeRest, pop, message.headers);
+            popupMenu.getMenu().findItem(R.id.menu_show_headers)
+                    .setEnabled(canShowHeaders)
+                    .setVisible(MessageSelectionCapabilities.shouldShowNativeMessageMoreAction(
+                            nativeRest, canShowHeaders));
 
             popupMenu.getMenu().findItem(R.id.menu_show_html).setVisible(Helper.hasWebView(context) && message.content);
 
@@ -6533,9 +6935,16 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     (message.accountProtocol == EntityAccount.TYPE_POP && message.accountLeaveOnServer)) &&
                     EntityFolder.INBOX.equals(message.folderType));
 
-            popupMenu.getMenu().findItem(R.id.menu_raw_save).setEnabled(message.uid != null || popReload);
+            boolean hasRawIdentifier = (gmail || zoho || graph);
+            popupMenu.getMenu().findItem(R.id.menu_raw_save).setEnabled(message.uid != null || popReload ||
+                    hasRawIdentifier);
+            popupMenu.getMenu().findItem(R.id.menu_raw_save).setVisible(
+                    MessageSelectionCapabilities.shouldShowMessageMoreRawSave(
+                            nativeRest, hasRawIdentifier));
             popupMenu.getMenu().findItem(R.id.menu_raw_send_message).setEnabled(message.uid != null || popReload);
             popupMenu.getMenu().findItem(R.id.menu_raw_send_thread).setEnabled(message.uid != null || popReload);
+            popupMenu.getMenu().findItem(R.id.menu_raw_send)
+                    .setVisible(MessageSelectionCapabilities.shouldShowLegacyOnlyMessageMoreAction(nativeRest));
 
             popupMenu.getMenu().findItem(R.id.menu_thread_info)
                     .setVisible(BuildConfig.DEBUG || debug);
@@ -6544,19 +6953,23 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     .setEnabled(message.content);
 
             popupMenu.getMenu().findItem(R.id.menu_resync)
-                    .setEnabled(message.uid != null ||
+                    .setEnabled(message.uid != null || graph ||
                             message.accountProtocol == EntityAccount.TYPE_POP)
-                    .setVisible(message.accountProtocol == EntityAccount.TYPE_IMAP || popReload);
+                    .setVisible(MessageSelectionCapabilities.shouldShowMessageMoreResync(
+                            nativeRest, graph,
+                            message.accountProtocol == EntityAccount.TYPE_IMAP || popReload));
             popupMenu.getMenu().findItem(R.id.menu_charset)
                     .setEnabled(message.uid != null ||
                             message.accountProtocol == EntityAccount.TYPE_POP)
-                    .setVisible(message.accountProtocol == EntityAccount.TYPE_IMAP || popReload);
+                    .setVisible(MessageSelectionCapabilities.shouldShowLegacyOnlyMessageMoreAction(nativeRest) &&
+                            (message.accountProtocol == EntityAccount.TYPE_IMAP || popReload));
             popupMenu.getMenu().findItem(R.id.menu_alternative)
                     .setTitle(message.isPlainOnly()
                             ? R.string.title_alternative_html : R.string.title_alternative_text)
                     .setEnabled(message.hasAlt() && !message.isEncrypted() &&
                             (message.uid != null || message.accountProtocol == EntityAccount.TYPE_POP))
-                    .setVisible(message.accountProtocol == EntityAccount.TYPE_IMAP || popReload);
+                    .setVisible(MessageSelectionCapabilities.shouldShowLegacyOnlyMessageMoreAction(nativeRest) &&
+                            (message.accountProtocol == EntityAccount.TYPE_IMAP || popReload));
 
             popupMenu.insertIcons(context);
 
@@ -6567,9 +6980,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 public boolean onMenuItemClick(MenuItem target) {
                     int itemId = target.getItemId();
                     if (itemId == R.id.menu_button) {
-                        FragmentDialogButtons buttons = new FragmentDialogButtons();
-                        buttons.setTargetFragment(parentFragment, FragmentMessages.REQUEST_BUTTONS);
-                        buttons.show(parentFragment.getParentFragmentManager(), "dialog:buttons");
+                        onConfigureButtons(message);
                         return true;
                     } else if (itemId == R.id.menu_unseen) {
                         onToggleSeen(message);
@@ -6605,7 +7016,7 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                         onActionDeleteAttachments(message);
                         return true;
                     } else if (itemId == R.id.menu_delete) {
-                        onActionDelete(message);
+                        onActionDelete(message, nativeRest, zohoDeleteTrace);
                         return true;
                     } else if (itemId == R.id.menu_edit_notes) {
                         onMenuNotes(message);
@@ -6614,7 +7025,10 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                         onMenuCreateRule(message);
                         return true;
                     } else if (itemId == R.id.menu_manage_keywords) {
-                        onMenuManageKeywords(message);
+                        if (gmail)
+                            onActionLabels(message);
+                        else
+                            onMenuManageKeywords(message);
                         return true;
                     } else if (itemId == R.id.menu_search_in_text) {
                         onSearchText(message, searched);
@@ -7360,22 +7774,30 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                         if (folder == null)
                             return null;
 
-                        if (message.uid == null && account.protocol == EntityAccount.TYPE_IMAP)
-                            return null;
-                        if (account.protocol == EntityAccount.TYPE_POP && !EntityFolder.INBOX.equals(folder.type))
-                            return null;
+                        if (account.isGraphApi()) {
+                            if (message.graph_id == null || folder.graph_folder_id == null)
+                                return null;
+                        } else {
+                            if (message.uid == null && account.protocol == EntityAccount.TYPE_IMAP)
+                                return null;
+                            if (account.protocol == EntityAccount.TYPE_POP && !EntityFolder.INBOX.equals(folder.type))
+                                return null;
 
-                        db.message().deleteMessage(id);
+                            db.message().deleteMessage(id);
 
-                        if (account.protocol == EntityAccount.TYPE_IMAP)
-                            EntityOperation.queue(context, folder, EntityOperation.FETCH, message.uid, true);
+                            if (account.protocol == EntityAccount.TYPE_IMAP)
+                                EntityOperation.queue(context, folder, EntityOperation.FETCH, message.uid, true);
+                        }
 
                         db.setTransactionSuccessful();
                     } finally {
                         db.endTransaction();
                     }
 
-                    if (account.protocol == EntityAccount.TYPE_IMAP)
+                    if (account.isGraphApi()) {
+                        EntityOperation.sync(context, folder.id, true);
+                        ServiceSynchronize.eval(context, "Graph resync");
+                    } else if (account.protocol == EntityAccount.TYPE_IMAP)
                         ServiceSynchronize.eval(context, "resync");
                     else
                         EntityOperation.sync(context, folder.id, true);
@@ -7899,6 +8321,10 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
         }
 
         private void onMenuShowHeaders(TupleMessageEx message) {
+            boolean pop = (message.accountProtocol == EntityAccount.TYPE_POP);
+            if (!MessageSelectionCapabilities.canShowHeaders(message.uid != null,
+                    message.isNativeRestMessage(), pop, message.headers))
+                return;
             boolean show_headers = !properties.getValue("headers", message.id);
             properties.setValue("headers", message.id, show_headers);
 
@@ -7987,7 +8413,11 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                         if (message == null)
                             return null;
 
-                        EntityOperation.queue(context, message, EntityOperation.RAW);
+                        if (message.isNativeRestMessage())
+                            EntityOperation.queue(context, message, EntityOperation.RAW,
+                                    NativeApiContentOperations.EXPLICIT_RAW_EXPORT_ARGUMENT);
+                        else
+                            EntityOperation.queue(context, message, EntityOperation.RAW);
 
                         db.message().setMessageRaw(message.id, false);
 
@@ -8034,12 +8464,17 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             if (message.labels == null || message.labels.length == 0)
                 return null;
 
+            Map<String, String> gmailLabelNames = (message.gmail_id == null
+                    ? Collections.<String, String>emptyMap()
+                    : GmailLabelFolder.parseLabelDisplayData(message.gmailLabelDisplayData));
             SpannableStringBuilder ssb = new SpannableStringBuilderEx();
             for (int i = 0; i < message.labels.length; i++) {
                 if (ssb.length() > 0)
                     ssb.append(' ');
 
-                String label = message.labels[i];
+                String label = (message.gmail_id == null
+                        ? message.labels[i]
+                        : GmailLabelFolder.getDisplayLabel(message.labels[i], gmailLabelNames));
                 ssb.append(label);
 
                 if (message.label_colors == null)
@@ -8187,10 +8622,10 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                             context.getString(R.string.title_archive)));
 
                     info.addAction(new AccessibilityNodeInfo.AccessibilityAction(R.id.ibTrash,
-                            context.getString(R.string.title_trash)));
+                            ibTrash.getContentDescription()));
 
                     info.addAction(new AccessibilityNodeInfo.AccessibilityAction(R.id.ibTrashBottom,
-                            context.getString(R.string.title_trash_conversation)));
+                            ibTrashBottom.getContentDescription()));
 
                     if (properties.getSelectionCount() > 0)
                         info.addAction(new AccessibilityNodeInfo.AccessibilityAction(R.id.ibDelete,
@@ -8263,11 +8698,19 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                     onActionArchive(message);
                     return true;
                 } else if (action == R.id.ibTrash) {
-                    onActionTrash(message, false);
+                    boolean permanent = (message.isNativeRestMessage() &&
+                            Boolean.TRUE.equals(ibTrash.getTag()));
+                    onActionTrash(message, permanent);
                     return true;
                 } else if (action == R.id.ibTrashBottom) {
-                    properties.select(message.id, true);
-                    properties.moveSelection(EntityFolder.TRASH, false);
+                    boolean permanent = (message.isNativeRestMessage() &&
+                            Boolean.TRUE.equals(ibTrash.getTag()));
+                    if (permanent)
+                        onActionTrash(message, true);
+                    else {
+                        properties.select(message.id, true);
+                        properties.moveSelection(EntityFolder.TRASH, false);
+                    }
                     return true;
                 } else if (action == R.id.ibDelete) {
                     properties.moveSelection(EntityFolder.TRASH, false);
@@ -8885,7 +9328,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 }
                 if (!Helper.equal(prev.labels, next.labels)) {
                     same = false;
-                    log("labels changed", next.id);
+                    log("labels changed", next.id,
+                            MessageSelectionCapabilities.shouldShowLabelChangeToast(next.gmail_id != null));
                 }
                 // fts
                 if (!prev.auto_classified.equals(next.auto_classified)) {
@@ -8895,7 +9339,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 // notifying
                 if (!prev.ui_seen.equals(next.ui_seen)) {
                     same = false;
-                    log("ui_seen changed " + prev.ui_seen + "/" + next.ui_seen, next.id);
+                    log("ui_seen changed " + prev.ui_seen + "/" + next.ui_seen, next.id,
+                            MessageSelectionCapabilities.shouldShowUiSeenChangeToast(next.gmail_id != null));
                 }
                 if (!prev.ui_answered.equals(next.ui_answered)) {
                     same = false;
@@ -8920,17 +9365,26 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 if (debug &&
                         !prev.ui_ignored.equals(next.ui_ignored)) {
                     same = false;
-                    log("ui_ignored changed", next.id);
+                    log("ui_ignored changed", next.id,
+                            MessageSelectionCapabilities.shouldShowReadStateDiffToast(next.gmail_id != null));
                 }
                 // ui_silent
                 // ui_local_only
                 if (!prev.ui_browsed.equals(next.ui_browsed)) {
                     same = false;
-                    log("ui_browsed changed", next.id);
+                    log("ui_browsed changed", next.id,
+                            MessageSelectionCapabilities.shouldShowReadStateDiffToast(next.gmail_id != null));
                 }
                 if (!Objects.equals(prev.ui_busy, next.ui_busy)) {
                     same = false;
-                    log("ui_busy changed " + prev.ui_busy + "/" + next.ui_busy, next.id);
+                    boolean pendingGmailTransition =
+                            prev.isGmailActionPending() || next.isGmailActionPending();
+                    log("ui_busy changed " + prev.ui_busy + "/" + next.ui_busy, next.id,
+                            !pendingGmailTransition);
+                }
+                if (!Objects.equals(prev.gmail_action_pending, next.gmail_action_pending)) {
+                    same = false;
+                    log("gmail_action_pending changed", next.id, false);
                 }
                 if (!Objects.equals(prev.ui_snoozed, next.ui_snoozed)) {
                     same = false;
@@ -9017,7 +9471,8 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 }
                 if (prev.unseen != next.unseen) {
                     same = false;
-                    log("unseen changed " + prev.unseen + "/" + next.unseen, next.id);
+                    log("unseen changed " + prev.unseen + "/" + next.unseen, next.id,
+                            MessageSelectionCapabilities.shouldShowReadStateDiffToast(next.gmail_id != null));
                 }
                 if (prev.unflagged != next.unflagged) {
                     same = false;
@@ -9029,11 +9484,13 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
                 }
                 if (prev.visible != next.visible) {
                     same = false;
-                    log("visible changed " + prev.visible + "/" + next.visible, next.id);
+                    log("visible changed " + prev.visible + "/" + next.visible, next.id,
+                            MessageSelectionCapabilities.shouldShowReadStateDiffToast(next.gmail_id != null));
                 }
                 if (prev.visible_unseen != next.visible_unseen) {
                     same = false;
-                    log("visible_unseen changed " + prev.visible_unseen + "/" + next.visible_unseen, next.id);
+                    log("visible_unseen changed " + prev.visible_unseen + "/" + next.visible_unseen, next.id,
+                            MessageSelectionCapabilities.shouldShowReadStateDiffToast(next.gmail_id != null));
                 }
                 if (prev.totalAttachments != next.totalAttachments) {
                     same = false;
@@ -9052,8 +9509,12 @@ public class AdapterMessage extends RecyclerView.Adapter<AdapterMessage.ViewHold
             }
 
             private void log(String msg, long id) {
+                log(msg, id, true);
+            }
+
+            private void log(String msg, long id, boolean showToast) {
                 Log.i(msg + " id=" + id);
-                if (BuildConfig.DEBUG || debug) {
+                if (showToast && (BuildConfig.DEBUG || debug)) {
                     View view = parentFragment.getView();
                     if (view != null) {
                         view.post(new Runnable() {

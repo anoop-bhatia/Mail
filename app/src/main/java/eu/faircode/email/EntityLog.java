@@ -105,7 +105,26 @@ public class EntityLog {
     }
 
     static void log(final Context context, @NonNull Type type, Long account, Long folder, Long message, String data) {
-        Log.i(data);
+        log(context, type, account, folder, message, data, true, true);
+    }
+
+    static void logProtocol(final Context context, String data) {
+        log(context, Type.Protocol, null, null, null, data, false, false);
+    }
+
+    static EntityLog createProtocolEntry(String data) {
+        return createEntry(Type.Protocol, null, null, null, data, false);
+    }
+
+    private static void log(final Context context, @NonNull Type type, Long account, Long folder, Long message,
+                            String data, boolean logInfo) {
+        log(context, type, account, folder, message, data, logInfo, true);
+    }
+
+    private static void log(final Context context, @NonNull Type type, Long account, Long folder, Long message,
+                            String data, boolean logInfo, boolean includeThread) {
+        if (logInfo)
+            Log.i(data);
 
         if (context == null)
             return;
@@ -125,14 +144,7 @@ public class EntityLog {
             data = j + "/" + n + " " + data;
         }
 
-        final EntityLog entry = new EntityLog();
-        entry.time = new Date().getTime();
-        entry.type = type;
-        entry.thread = Thread.currentThread().getId();
-        entry.account = account;
-        entry.folder = folder;
-        entry.message = message;
-        entry.data = data;
+        final EntityLog entry = createEntry(type, account, folder, message, data, includeThread);
 
         final DB db = DB.getInstance(context);
         final Context acontext = context.getApplicationContext();
@@ -175,6 +187,19 @@ public class EntityLog {
                 }
             }
         });
+    }
+
+    private static EntityLog createEntry(Type type, Long account, Long folder, Long message,
+                                         String data, boolean includeThread) {
+        EntityLog entry = new EntityLog();
+        entry.time = new Date().getTime();
+        entry.type = type;
+        entry.thread = (includeThread ? Thread.currentThread().getId() : null);
+        entry.account = account;
+        entry.folder = folder;
+        entry.message = message;
+        entry.data = data;
+        return entry;
     }
 
     static void clear(final Context context) {

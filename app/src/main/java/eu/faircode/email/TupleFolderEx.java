@@ -39,6 +39,8 @@ import java.util.Objects;
 public class TupleFolderEx extends EntityFolder implements Serializable {
     public Long accountId;
     public Integer accountProtocol;
+    public Integer accountAuthType;
+    public String accountProvider;
     public Integer accountOrder;
     public String accountName;
     public String accountCategory;
@@ -75,6 +77,8 @@ public class TupleFolderEx extends EntityFolder implements Serializable {
             return (super.equals(obj) &&
                     Objects.equals(this.accountId, other.accountId) &&
                     Objects.equals(this.accountProtocol, other.accountProtocol) &&
+                    Objects.equals(this.accountAuthType, other.accountAuthType) &&
+                    Objects.equals(this.accountProvider, other.accountProvider) &&
                     Objects.equals(this.accountOrder, other.accountOrder) &&
                     Objects.equals(this.accountName, other.accountName) &&
                     Objects.equals(this.accountCategory, other.accountCategory) &&

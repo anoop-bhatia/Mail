@@ -2862,7 +2862,9 @@ public class Helper {
     // Files
 
     static {
-        System.loadLibrary("fairemail");
+        // JVM unit tests exercise Java helpers without packaging the Android JNI library.
+        if (System.getProperty("org.gradle.test.worker") == null)
+            System.loadLibrary("fairemail");
     }
 
     public static native void sync();

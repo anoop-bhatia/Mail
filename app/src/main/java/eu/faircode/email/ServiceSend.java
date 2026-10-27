@@ -175,7 +175,7 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
 
                 List<Long> ops = new ArrayList<>();
                 for (EntityOperation op : operations) {
-                    if (!handling.contains(op.id))
+                    if (!handling.contains(op.id) && !EntityOperation.isSendOutcomeUnknown(op))
                         process.add(op);
                     ops.add(op.id);
                 }
@@ -183,8 +183,8 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
 
                 if (process.size() > 0) {
                     EntityLog.log(ServiceSend.this,
-                            "Send process=" + TextUtils.join(",", process) +
-                                    " handling=" + TextUtils.join(",", handling));
+                            "Send process=" + process.size() +
+                                    " handling=" + handling.size());
 
                     executor.submit(new Runnable() {
                         @Override
@@ -461,10 +461,10 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
                         message = db.message().getMessage(op.message);
 
                     try {
-                        EntityLog.log(this, "Send start op=" + op.id + "/" + op.name +
-                                " msg=" + op.message +
-                                " tries=" + op.tries +
-                                " args=" + op.args);
+                        EntityLog.log(this, "Send start op=" + op.name +
+                                " id=" + op.id +
+                                " message=" + op.message +
+                                " tries=" + op.tries);
 
                         db.operation().setOperationTries(op.id, ++op.tries);
                         db.operation().setOperationError(op.id, null);
@@ -476,10 +476,7 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
 
                         Map<String, String> crumb = new HashMap<>();
                         crumb.put("name", op.name);
-                        crumb.put("args", op.args);
-                        crumb.put("folder", op.folder + ":outbox");
-                        if (op.message != null)
-                            crumb.put("message", Long.toString(op.message));
+                        crumb.put("tries", Integer.toString(op.tries));
                         Log.breadcrumb("operation", crumb);
 
                         switch (op.name) {
@@ -504,11 +501,40 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
                         ops.remove(op);
                     } catch (Throwable ex) {
                         Log.e(outbox.name, ex);
+                        if (GmailSendAttempt.continueQueueAfterFailure(ops, op, ex)) {
+                            String error = EntityOperation.GMAIL_SEND_OUTCOME_UNKNOWN_ERROR;
+                            db.operation().setOperationError(op.id, error);
+                            if (message != null)
+                                db.message().setMessageError(message.id, error);
+                            EntityLog.log(this, "Gmail send outcome unknown op=" + op.id +
+                                    " message=" + op.message + " stage=post-upload-unconfirmed");
+                            // Do not retry a possibly accepted Gmail message; keep it held for review.
+                            Thread.interrupted();
+                            continue;
+                        }
+                        if (GraphSendAttempt.continueQueueAfterFailure(ops, op, ex)) {
+                            GraphSendAttempt.SendTimeoutException timeout =
+                                    (GraphSendAttempt.SendTimeoutException) ex;
+                            String error = EntityOperation.SEND_OUTCOME_UNKNOWN_ERROR;
+                            db.operation().setOperationError(op.id, error);
+                            if (message != null)
+                                db.message().setMessageError(message.id, error);
+                            EntityLog.log(this, "Graph send outcome unknown op=" + op.id +
+                                    " message=" + op.message +
+                                    " stage=" + timeout.phase.name().toLowerCase(java.util.Locale.ROOT) +
+                                    (timeout.status < 0 ? "" : " status=" + timeout.status) +
+                                    " elapsed=" + timeout.elapsedMillis + "ms");
+                            // The request may have been accepted; do not retry it, but let other accounts proceed.
+                            Thread.interrupted();
+                            continue;
+                        }
                         EntityLog.log(this, "Send " + Log.formatThrowable(ex, false));
 
                         boolean unrecoverable = (ex instanceof OutOfMemoryError ||
                                 ex instanceof MessageRemovedException ||
                                 ex instanceof FileNotFoundException ||
+                                (ex instanceof ZohoApi.ApiException &&
+                                        ((ZohoApi.ApiException) ex).isPermanentRequestFailure()) ||
                                 (ex instanceof AuthenticationFailedException && !ConnectionHelper.isIoError(ex)) ||
                                 ex instanceof SendFailedException ||
                                 ex instanceof IllegalArgumentException);
@@ -578,7 +604,7 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
                             throw ex;
                         }
                     } finally {
-                        EntityLog.log(this, "Send end op=" + op.id + "/" + op.name);
+                        EntityLog.log(this, "Send end op=" + op.name);
                         db.operation().setOperationState(op.id, null);
                     }
                 }
@@ -614,13 +640,15 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
                     continue;
 
                 EntityOperation op = db.operation().getOperation(message.id, EntityOperation.SEND);
-                if (op != null) {
-                    if ("executing".equals(op.state))
-                        continue;
-                    db.operation().deleteOperation(op.id);
+                if (!EntityOperation.shouldRecoverSendOnSync(op)) {
+                    if (EntityOperation.isSendOutcomeUnknown(op))
+                        EntityLog.log(this, "Send restore skipped: outcome unknown op=" + op.id);
+                    continue;
                 }
+                if (op != null)
+                    db.operation().deleteOperation(op.id);
 
-                EntityLog.log(this, "Send restore id=" + message.id + " error=" + message.error);
+                EntityLog.log(this, "Send restore");
 
                 db.message().setMessageError(message.id, null);
                 nm.cancel("send:" + message.id, NotificationHelper.NOTIFICATION_TAGGED);
@@ -673,6 +701,12 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
 
         EntityAccount account = db.account().getAccount(message.account);
 
+        List<EntityMessage> replySources = (TextUtils.isEmpty(message.inreplyto)
+                ? null : db.message().getMessagesByMsgId(message.account, message.inreplyto));
+        String gmailReplyThreadId = NativeApiReply.gmailThreadId(replySources);
+        String zohoReplyMessageId = NativeApiReply.zohoMessageId(replySources);
+        String graphReplyMessageId = NativeApiReply.graphMessageId(replySources);
+
         EntityIdentity ident = db.identity().getIdentity(message.identity);
         if (ident == null)
             throw new IllegalArgumentException("Identity not found");
@@ -700,7 +734,9 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
         Long sid = null;
         EntityFolder sent = null;
 
-        if (reply_move && !TextUtils.isEmpty(message.inreplyto)) {
+        // Zoho REST actions must use the folder that actually contains the remote message.
+        if (reply_move && (account == null || !account.isZohoApi()) &&
+                !TextUtils.isEmpty(message.inreplyto)) {
             List<EntityMessage> replied = db.message().getMessagesByMsgId(message.account, message.inreplyto);
             if (replied != null)
                 for (EntityMessage m : replied)
@@ -720,8 +756,7 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
             sent = db.folder().getFolderByType(message.account, EntityFolder.SENT);
 
         if (sent != null) {
-            EntityLog.log(this, sent.name + " Preparing sent message" +
-                    " folder=" + sent.name + "/" + sent.type);
+            EntityLog.log(this, "Preparing sent message");
 
             long id = message.id;
 
@@ -729,7 +764,7 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
             MessageHelper helper = new MessageHelper(imessage, this);
 
             if (message.uid != null) {
-                Log.e("Outbox id=" + message.id + " uid=" + message.uid);
+                Log.e("Outbox message had a server UID");
                 message.uid = null;
             }
 
@@ -803,10 +838,130 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
         long end = 0;
         Long max_size = null;
         SendFailedException partial = null;
-        if (ident.auth_type == AUTH_TYPE_GRAPH) {
+        if (account != null && account.isGmail() && !ident.isGmailApi())
+            throw new MessagingException(getString(R.string.title_setup_gmail_api_only));
+        if (account != null && account.isZohoApi() && !ident.isZohoApi())
+            throw new MessagingException("Select a Zoho Mail API identity for this account");
+        if (account != null && account.isGraphApi() && !ident.isGraphApi())
+            throw new MessagingException("Select a Microsoft Graph API identity for this account");
+        if (ident.isZohoApi()) {
             start = new Date().getTime();
-            MicrosoftGraph.send(ServiceSend.this, ident, imessage);
+            db.identity().setIdentityState(ident.id, "connecting");
+            try {
+                if (ZohoApi.hasZeroByteAttachment(imessage))
+                    throw new IllegalArgumentException(getString(R.string.title_zoho_zero_byte_attachment));
+
+                ServiceAuthenticator authenticator = new ServiceAuthenticator(
+                        this,
+                        ident.auth_type,
+                        ident.provider,
+                        ident.user,
+                        ident.password,
+                        new ServiceAuthenticator.IAuthenticated() {
+                            @Override
+                            public void onPasswordChanged(Context context, String newPassword) {
+                                db.identity().setIdentityPassword(ident.id, newPassword);
+                            }
+                        });
+                String token;
+                try {
+                    token = authenticator.refreshToken(false);
+                } catch (android.accounts.AuthenticatorException | android.accounts.OperationCanceledException ex) {
+                    throw new MessagingException("Zoho Mail API token refresh failed", ex);
+                }
+                ZohoState tokenState = ZohoState.jsonDeserialize(ident.password);
+                ZohoApi api = new ZohoApi(token, tokenState.apiDomain, tokenState.accountId);
+                api.setProtocolLogContext(this);
+                api.setTokenRefresher(rejected -> authenticator.refreshZohoTokenAfterUnauthorized());
+                String sentMessageId = ZohoApi.getSentMessageId(api.send(imessage, zohoReplyMessageId));
+                if (sid != null) {
+                    if (sentMessageId != null) {
+                        try {
+                            String folderIds = ZohoMailMutator.getSentFolderMembership(sent);
+                            if (db.message().setMessageZohoId(sid, sentMessageId, folderIds) > 0)
+                                EntityLog.log(this, "Linked Zoho sent copy to its REST message" +
+                                        (folderIds == null ? " without a Sent-folder mapping" : " and Sent folder"));
+                        } catch (RuntimeException ex) {
+                            // Sending already succeeded; never turn a local-link failure into a duplicate send.
+                            Log.e(ex);
+                            EntityLog.log(this, "Zoho send succeeded but its local sent copy could not be linked");
+                        }
+                    } else
+                        EntityLog.log(this, "Zoho send succeeded without a usable message ID; Sent sync will reconcile by RFC Message-ID and time");
+                }
+                end = new Date().getTime();
+                max_size = ident.max_size;
+                EntityLog.log(this, "Sent via Zoho Mail API elapse=" + (end - start) + " ms");
+                db.identity().setIdentityState(ident.id, "connected");
+            } catch (IOException | JSONException | MessagingException | IllegalArgumentException ex) {
+                db.identity().setIdentityError(ident.id, Log.formatThrowable(ex));
+                if (sid != null)
+                    db.message().deleteMessage(sid);
+                throw ex;
+            } finally {
+                db.identity().setIdentityState(ident.id, null);
+            }
+        } else if (ident.isGmailApi()) {
+            start = new Date().getTime();
+            db.identity().setIdentityState(ident.id, "connecting");
+            try {
+                ServiceAuthenticator authenticator = new ServiceAuthenticator(
+                        this,
+                        ident.auth_type,
+                        ident.provider,
+                        ident.user,
+                        ident.password,
+                        new ServiceAuthenticator.IAuthenticated() {
+                            @Override
+                            public void onPasswordChanged(Context context, String newPassword) {
+                                db.identity().setIdentityPassword(ident.id, newPassword);
+                            }
+                        });
+                String token;
+                try {
+                    token = authenticator.refreshToken(false);
+                } catch (android.accounts.AuthenticatorException | android.accounts.OperationCanceledException ex) {
+                    throw new MessagingException("Gmail API token refresh failed", ex);
+                }
+
+                GmailApi api = new GmailApi(token);
+                api.setTokenRefresher(rejectedToken -> authenticator.refreshGmailTokenAfterUnauthorized());
+                SharedPreferences quotaPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+                String quotaKey = ServiceSynchronize.getGmailQuotaKey(ident.user, ident.id);
+                GmailQuotaWindow quotaWindow = ServiceSynchronize.getGmailQuotaWindow(
+                        quotaPreferences, quotaKey);
+                api.setQuotaUsageListener(units -> {
+                    long requestAt = new Date().getTime();
+                    quotaWindow.recordRequest(requestAt, units);
+                    quotaPreferences.edit().putString(quotaKey,
+                            quotaWindow.serialize(requestAt)).commit();
+                });
+                api.send(imessage, gmailReplyThreadId);
+                end = new Date().getTime();
+                max_size = ident.max_size;
+                EntityLog.log(this, "Sent via Gmail API user=" + ident.user +
+                        " elapse=" + (end - start) + " ms");
+                db.identity().setIdentityState(ident.id, "connected");
+            } catch (IOException | JSONException | MessagingException | IllegalArgumentException ex) {
+                db.identity().setIdentityError(ident.id, Log.formatThrowable(ex));
+                if (sid != null)
+                    db.message().deleteMessage(sid);
+                throw ex;
+            } finally {
+                db.identity().setIdentityState(ident.id, null);
+            }
+        } else if (ident.auth_type == AUTH_TYPE_GRAPH || ident.isGraphApi()) {
+            start = new Date().getTime();
+            MicrosoftGraph.send(ServiceSend.this, ident, imessage, operation.id, message.id,
+                    graphReplyMessageId);
             end = new Date().getTime();
+            try {
+                EntityLog.log(this, "Graph send accepted status=202 op=" + operation.id +
+                        " message=" + message.id + " elapsed=" + (end - start) + " ms");
+            } catch (Throwable ex) {
+                Log.w("Graph send stage=accepted-log-failed op=" + operation.id +
+                        " message=" + message.id + " status=202");
+            }
         } else {
             if (account != null)
                 try (EmailService iaccount = new EmailService(this, account, EmailService.PURPOSE_USE, debug)) {
@@ -1063,6 +1218,13 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
             db.endTransaction();
         }
 
+        if (ident.auth_type == AUTH_TYPE_GRAPH || ident.isGraphApi())
+            EntityLog.log(this, "Graph local completion op=" + operation.id +
+                    " message=" + message.id +
+                    " outbox_remaining=" + (db.message().getMessage(message.id) != null) +
+                    " operation_remaining=" + (db.operation().getOperation(operation.id) != null) +
+                    " sent_copy=" + (sid == null ? "none" : sid));
+
         nm.cancel("send:" + message.id, NotificationHelper.NOTIFICATION_TAGGED);
 
         // Play sent sound
@@ -1078,7 +1240,7 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
                 // Message could have been deleted
                 EntityMessage orphan = db.message().getMessage(sid);
                 if (orphan != null)
-                    if (account == null || account.protocol == EntityAccount.TYPE_IMAP)
+                    if (EntityOperation.shouldQueueSentExists(account))
                         EntityOperation.queue(this, orphan, EntityOperation.EXISTS);
                     else if (sent != null)
                         EntityContact.received(this, account, sent, message);
@@ -1138,10 +1300,8 @@ public class ServiceSend extends ServiceBase implements SharedPreferences.OnShar
                         List<EntityOperation> operations = db.operation().getOperations(EntityOperation.SEND);
                         EntityLog.log(context, "Start send service ops=" + operations.size());
                         for (EntityOperation operation : operations)
-                            Log.i("Send operation id=" + operation.id +
-                                    " tries=" + operation.tries +
+                            Log.i("Send operation tries=" + operation.tries +
                                     " state=" + operation.state +
-                                    " error=" + operation.error +
                                     " created=" + new Date(operation.created));
 
                         if (!operations.isEmpty())

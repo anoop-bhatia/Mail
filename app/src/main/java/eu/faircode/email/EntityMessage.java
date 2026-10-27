@@ -78,6 +78,9 @@ import javax.mail.internet.InternetAddress;
                 @Index(value = {"replying"}),
                 @Index(value = {"forwarding"}),
                 @Index(value = {"folder", "uid"}, unique = true),
+                @Index(value = {"account", "gmail_id"}, unique = true),
+                @Index(value = {"account", "zoho_id"}, unique = true),
+                @Index(value = {"account", "graph_id"}, unique = true),
                 @Index(value = {"inreplyto"}),
                 @Index(value = {"msgid"}),
                 @Index(value = {"thread"}),
@@ -146,6 +149,18 @@ public class EntityMessage implements Serializable {
     public Long forwarding; // obsolete
     public Long uid; // compose/moved = null
     public String uidl; // POP3
+    public String gmail_id; // native Gmail REST message ID; never an IMAP UID
+    public String gmail_thread_id; // native Gmail REST thread ID
+    public String zoho_id; // native Zoho Mail REST message ID; never an IMAP UID
+    public String zoho_folder_ids; // pipe-delimited Zoho folder IDs; one local row can belong to many folders
+    public String graph_id; // native Microsoft Graph message ID; never an IMAP UID
+
+    boolean isNativeRestMessage() {
+        return (gmail_id != null || zoho_id != null || graph_id != null);
+    }
+    @NonNull
+    @ColumnInfo(defaultValue = "0")
+    public Boolean gmail_received_checked = false; // one-time internalDate verification
     public String msgid;
     public String hash; // headers hash
     public String references;

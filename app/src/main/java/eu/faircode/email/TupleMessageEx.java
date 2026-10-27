@@ -47,6 +47,7 @@ public class TupleMessageEx extends EntityMessage {
     public String folderDisplay;
     public String folderType;
     public String folderInheritedType;
+    public String gmailLabelDisplayData;
     public boolean folderUnified;
     public boolean folderReadOnly;
     public String identityName;
@@ -65,6 +66,12 @@ public class TupleMessageEx extends EntityMessage {
     public Long totalSize;
     public Integer ui_priority;
     public Integer ui_importance;
+    public Boolean gmail_action_pending;
+
+    boolean isGmailActionPending() {
+        return GmailPendingActionPolicy.isPending(
+                gmail_id != null, ui_busy, Boolean.TRUE.equals(gmail_action_pending));
+    }
 
     @Ignore
     boolean duplicate;
@@ -142,6 +149,7 @@ public class TupleMessageEx extends EntityMessage {
                     this.accountAutoSeen == other.accountAutoSeen &&
                     this.folderName.equals(other.folderName) &&
                     Objects.equals(this.folderDisplay, other.folderDisplay) &&
+                    Objects.equals(this.gmailLabelDisplayData, other.gmailLabelDisplayData) &&
                     this.folderType.equals(other.folderType) &&
                     Objects.equals(this.folderInheritedType, other.folderInheritedType) &&
                     this.folderUnified == other.folderUnified &&

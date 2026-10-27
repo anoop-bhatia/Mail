@@ -5808,8 +5808,9 @@ class Core {
 
     static class State {
         private int backoff;
-        private boolean backingoff = false;
-        private ConnectionHelper.NetworkState networkState;
+        private volatile boolean backingoff = false;
+        private final Object waitLock = new Object();
+        private volatile ConnectionHelper.NetworkState networkState;
         private Thread thread = new Thread();
         private Semaphore semaphore = new Semaphore(0);
         private boolean started = false;
@@ -5853,6 +5854,36 @@ class Core {
             semaphore.release();
             microWait();
             return true;
+        }
+
+        boolean releaseUnlessBackingOff() {
+            synchronized (waitLock) {
+                if (backingoff || !thread.isAlive())
+                    return false;
+                semaphore.release();
+            }
+            microWait();
+            return true;
+        }
+
+        boolean acquireRateLimitWait(long milliseconds) throws InterruptedException {
+            synchronized (waitLock) {
+                if (!running)
+                    return false;
+                backingoff = true;
+                semaphore.drainPermits();
+            }
+            try {
+                return semaphore.tryAcquire(milliseconds, TimeUnit.MILLISECONDS);
+            } finally {
+                synchronized (waitLock) {
+                    backingoff = false;
+                }
+            }
+        }
+
+        boolean isBackingOff() {
+            return backingoff;
         }
 
         boolean acquire(long milliseconds, boolean backingoff) throws InterruptedException {
@@ -5925,8 +5956,10 @@ class Core {
         }
 
         void stop() {
-            running = false;
-            semaphore.release();
+            synchronized (waitLock) {
+                running = false;
+                semaphore.release();
+            }
         }
 
         boolean isAlive() {

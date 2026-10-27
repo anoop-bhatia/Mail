@@ -1112,8 +1112,9 @@ class NotificationHelper {
             List<NotificationCompat.Action> wactions = new ArrayList<>();
 
             if (notify_trash &&
-                    !delete_notification &&
-                    message.accountProtocol == EntityAccount.TYPE_IMAP && perform_expunge) {
+                    (message.gmail_id != null ||
+                            (!delete_notification &&
+                                    message.accountProtocol == EntityAccount.TYPE_IMAP && perform_expunge))) {
                 EntityFolder folder = db.folder().getFolderByType(message.account, EntityFolder.TRASH);
                 if (folder != null && !folder.id.equals(message.folder)) {
                     Intent trash = new Intent(context, ServiceUI.class)
@@ -1132,7 +1133,7 @@ class NotificationHelper {
 
                     wactions.add(actionTrash.build());
                 }
-            } else if (notify_trash &&
+            } else if (notify_trash && message.gmail_id == null &&
                     (delete_notification ||
                             (message.accountProtocol == EntityAccount.TYPE_POP && message.accountLeaveDeleted) ||
                             (message.accountProtocol == EntityAccount.TYPE_IMAP && !perform_expunge))) {

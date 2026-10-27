@@ -90,10 +90,19 @@ public class FragmentDialogDownloadAttachments extends FragmentDialogBase {
                             return null;
 
                         List<EntityAttachment> attachments = db.attachment().getAttachments(message.id);
+                        boolean queued = false;
                         if (attachments != null)
                             for (EntityAttachment attachment : attachments)
-                                if (download.contains(attachment.id))
+                                if (download.contains(attachment.id)) {
                                     EntityOperation.queue(context, message, EntityOperation.ATTACHMENT, attachment.id);
+                                    queued = true;
+                                }
+                        EntityAccount account = db.account().getAccount(message.account);
+                        if (queued && NativeApiContentOperations.shouldWakeAfterBulkAttachmentQueue(account))
+                            ServiceSynchronize.eval(context, message.account,
+                                    (account.isGmailApi()
+                                            ? "Gmail API bulk attachment request"
+                                            : "Zoho bulk attachment request"));
 
                         return null;
                     }

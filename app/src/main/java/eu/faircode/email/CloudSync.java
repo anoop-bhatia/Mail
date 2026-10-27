@@ -194,7 +194,7 @@ public class CloudSync {
         if (accounts != null)
             for (EntityAccount account : accounts)
                 if (account.synchronize && !TextUtils.isEmpty(account.uuid) &&
-                        account.auth_type != ServiceAuthenticator.AUTH_TYPE_GMAIL) {
+                        !account.isNativeRestApi()) {
                     EntityAccount aexisting = null;
                     File afile = new File(dir, "account." + account.uuid + ".json");
                     if (afile.exists())
@@ -267,7 +267,7 @@ public class CloudSync {
         JSONArray jaccountuuidlist = new JSONArray();
         for (EntityAccount account : accounts)
             if (account.synchronize && !TextUtils.isEmpty(account.uuid) &&
-                    account.auth_type != ServiceAuthenticator.AUTH_TYPE_GMAIL) {
+                    !account.isNativeRestApi()) {
                 if (uuidAccounts.contains(account.uuid)) {
                     Log.w("Duplicate account uuid=" + account.uuid);
                     account.uuid = UUID.randomUUID().toString();

@@ -448,6 +448,8 @@ public class EmailService implements AutoCloseable {
             String user, String password,
             ServiceAuthenticator.IAuthenticated intf,
             String certificate, String fingerprint) throws MessagingException {
+        if (EntityAccount.isGmailHost(host))
+            throw new MessagingException(context.getString(R.string.title_setup_gmail_api_only));
         properties.put("fairemail.server", host);
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);

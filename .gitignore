@@ -27,3 +27,17 @@ app/.cxx/
 build
 captures
 gradle
+
+# Local Android build outputs and caches
+**/build/
+**/.gradle/
+**/.kotlin/
+**/.cxx/
+
+# Compiled Android/JVM artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.hprof

@@ -241,10 +241,14 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.Set;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -269,6 +273,24 @@ import me.everything.android.ui.overscroll.adapters.RecyclerViewOverScrollDecorA
 
 public class FragmentMessages extends FragmentBase
         implements SharedPreferences.OnSharedPreferenceChangeListener, FragmentManager.OnBackStackChangedListener {
+    private static class MoveTargetList extends ArrayList<MessageTarget> {
+        int gmailRejected;
+        long gmailAccount = -1L;
+    }
+
+    private static class DeleteCallbackResult {
+        final List<Long> legacyRemoved = new ArrayList<>();
+        final List<Long> gmailQueued = new ArrayList<>();
+        int gmailSkipped;
+        int zohoSkipped;
+    }
+
+    private static class MoveCallbackResult {
+        final List<Long> gmailQueued = new ArrayList<>();
+        int gmailSkipped;
+        boolean queuedOther;
+    }
+
     private ViewGroup view;
     private SwipeRefreshLayoutEx swipeRefresh;
     private TextView tvAirplane;
@@ -349,6 +371,7 @@ public class FragmentMessages extends FragmentBase
     private boolean server;
     private String thread;
     private long id;
+    private String graphOpenTraceId;
     private int lpos;
     private boolean filter_archive;
     private boolean found;
@@ -421,6 +444,8 @@ public class FragmentMessages extends FragmentBase
     private int lastSentCount = 0;
     private boolean autoExpanded = true;
     private Long lastSync = null;
+    private Boolean zohoApiAccount = null;
+    private Boolean zohoSpamEmptySupported = null;
 
     private Integer lastUnseen;
     private Integer lastUnified;
@@ -499,6 +524,10 @@ public class FragmentMessages extends FragmentBase
         category = args.getString("category");
         account = args.getLong("account", -1);
         folder = args.getLong("folder", -1);
+        if (account <= 0) {
+            zohoApiAccount = Boolean.FALSE;
+            zohoSpamEmptySupported = Boolean.FALSE;
+        }
         server = args.getBoolean("server", false);
         thread = args.getString("thread");
         id = args.getLong("id", -1);
@@ -602,6 +631,45 @@ public class FragmentMessages extends FragmentBase
     @Nullable
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         setHasOptionsMenu(true);
+        if (account > 0 && zohoApiAccount == null) {
+            Bundle accountArgs = new Bundle();
+            accountArgs.putLong("account", account);
+            accountArgs.putLong("folder", folder);
+            new SimpleTask<Bundle>() {
+                @Override
+                protected Bundle onExecute(Context context, Bundle args) {
+                    DB db = DB.getInstance(context);
+                    EntityAccount owner = db.account().getAccount(args.getLong("account"));
+                    EntityFolder current = db.folder().getFolder(args.getLong("folder"));
+                    Bundle result = new Bundle();
+                    result.putBoolean("zoho", owner != null && owner.isZohoApi());
+                    result.putBoolean("zoho_empty_spam", owner != null &&
+                            owner.auth_type != null &&
+                            owner.auth_type == ServiceAuthenticator.AUTH_TYPE_ZOHO &&
+                            current != null && EntityFolder.JUNK.equals(current.type) &&
+                            FolderActionCapabilities.canEmptyFolder(owner, current));
+                    return result;
+                }
+
+                @Override
+                protected void onExecuted(Bundle args, Bundle result) {
+                    zohoApiAccount = (result == null ? Boolean.FALSE : result.getBoolean("zoho"));
+                    zohoSpamEmptySupported = (result == null ? Boolean.FALSE :
+                            result.getBoolean("zoho_empty_spam"));
+                    if (getActivity() != null)
+                        getActivity().invalidateOptionsMenu();
+                }
+
+                @Override
+                protected void onException(Bundle args, Throwable ex) {
+                    Log.e(ex);
+                    zohoApiAccount = null;
+                    zohoSpamEmptySupported = null;
+                    if (getActivity() != null)
+                        getActivity().invalidateOptionsMenu();
+                }
+            }.execute(this, accountArgs, "messages:account-provider");
+        }
 
         setActionBarListener(getViewLifecycleOwner(), new View.OnClickListener() {
             @Override
@@ -1520,7 +1588,7 @@ public class FragmentMessages extends FragmentBase
                 int itemId = menuItem.getItemId();
                 if (itemId == actionbar_delete_id) {
                     if (data.delete)
-                        onActionDelete();
+                        onActionDelete(data.forever);
                     else
                         onActionMove(EntityFolder.TRASH);
                     return true;
@@ -1577,14 +1645,21 @@ public class FragmentMessages extends FragmentBase
                                     aid, thread, threading ? null : id, null);
                             for (EntityMessage threaded : messages) {
                                 EntityFolder sourceFolder = db.folder().getFolder(threaded.folder);
-                                if (sourceFolder != null && !sourceFolder.read_only &&
+                                boolean gmailWritableSource = (account.isGmailApi() &&
+                                        GmailMailMutator.isWritableMessage(account, sourceFolder, threaded));
+                                if (sourceFolder != null && (!sourceFolder.read_only || gmailWritableSource) &&
+                                        (!account.isGmailApi() ||
+                                                GmailMailMutator.canMoveToTarget(account, sourceFolder, threaded, targetFolder)) &&
                                         !targetFolder.id.equals(threaded.folder) &&
                                         (!filter_archive || !EntityFolder.ARCHIVE.equals(sourceFolder.type)) &&
                                         !EntityFolder.DRAFTS.equals(sourceFolder.type) && !EntityFolder.OUTBOX.equals(sourceFolder.type) &&
                                         !(EntityFolder.SENT.equals(sourceFolder.type) && EntityFolder.ARCHIVE.equals(targetFolder.type)) &&
                                         !(EntityFolder.SENT.equals(sourceFolder.type) && EntityFolder.JUNK.equals(targetFolder.type)) &&
                                         (!EntityFolder.SENT.equals(sourceFolder.type) || !EntityFolder.TRASH.equals(targetFolder.type) || move_thread_sent) &&
-                                        !EntityFolder.TRASH.equals(sourceFolder.type) && !EntityFolder.JUNK.equals(sourceFolder.type))
+                                        (!EntityFolder.TRASH.equals(sourceFolder.type) ||
+                                                (account.isGmailApi() && EntityFolder.INBOX.equals(targetFolder.type))) &&
+                                        (!EntityFolder.JUNK.equals(sourceFolder.type) ||
+                                                (account.isGmailApi() && EntityFolder.INBOX.equals(targetFolder.type))))
                                     result.add(new MessageTarget(context, threaded, account, sourceFolder, account, targetFolder));
                             }
 
@@ -1798,6 +1873,16 @@ public class FragmentMessages extends FragmentBase
                 if (result == null)
                     return;
 
+                if (result.graphApiSelected) {
+                    if (result.copyto != null && result.copyto.isGraphApi())
+                        onActionMoveSelectionAccount(result.copyto.id, false, result.folders);
+                    return;
+                }
+                if (result.zohoApiSelected) {
+                    if (result.canMove() && result.zohoApiAccount != null)
+                        onActionMoveSelectionAccount(result.zohoApiAccount.id, false, result.folders, false);
+                    return;
+                }
                 PopupMenuLifecycle popupMenu = new PopupMenuLifecycle(getContext(), getViewLifecycleOwner(), ibMove);
 
                 int order = 0;
@@ -1832,7 +1917,10 @@ public class FragmentMessages extends FragmentBase
                 if (result == null)
                     return;
 
-                if (result.copyto == null)
+                if (result.zohoApiSelected) {
+                    if (result.canMove() && result.zohoApiAccount != null)
+                        onActionMoveSelectionAccount(result.zohoApiAccount.id, false, result.folders, false);
+                } else if (result.copyto == null)
                     runMoveTo.run();
                 else
                     onActionMoveSelectionAccount(result.copyto.id, false, result.folders);
@@ -2700,7 +2788,8 @@ public class FragmentMessages extends FragmentBase
         public void setExpanded(TupleMessageEx message, boolean value, boolean scroll) {
             // Prevent flicker
             if (value && message.accountAutoSeen && seen_delay == 0 &&
-                    (message.uid != null || message.accountProtocol == EntityAccount.TYPE_POP)) {
+                    (message.uid != null || message.zoho_id != null || message.graph_id != null ||
+                            message.accountProtocol == EntityAccount.TYPE_POP)) {
                 message.unseen = 0;
                 message.ui_seen = true;
                 message.visible_unseen = 0;
@@ -3086,6 +3175,8 @@ public class FragmentMessages extends FragmentBase
             TupleMessageEx message = getMessage(pos);
             if (message == null)
                 return 0;
+            if (message.isGmailActionPending())
+                return 0;
 
             boolean expanded = iProperties.getValue("expanded", message.id);
 
@@ -3099,7 +3190,7 @@ public class FragmentMessages extends FragmentBase
             if (swipes == null)
                 return 0;
 
-            if (message.uid == null &&
+            if (!message.isNativeRestMessage() && message.uid == null &&
                     message.accountProtocol == EntityAccount.TYPE_IMAP &&
                     (EntityFolder.DRAFTS.equals(message.folderType) ||
                             EntityFolder.SENT.equals(message.folderType)))
@@ -3107,7 +3198,8 @@ public class FragmentMessages extends FragmentBase
                         (EntityFolder.TRASH.equals(swipes.left_type) ? ItemTouchHelper.LEFT : 0) |
                                 (EntityFolder.TRASH.equals(swipes.right_type) ? ItemTouchHelper.RIGHT : 0));
 
-            if (message.uid == null && message.accountProtocol == EntityAccount.TYPE_IMAP)
+            if (message.uid == null && message.zoho_id == null && message.graph_id == null &&
+                    message.accountProtocol == EntityAccount.TYPE_IMAP)
                 return 0;
 
             if (!message.content) {
@@ -3213,7 +3305,7 @@ public class FragmentMessages extends FragmentBase
                     return;
             }
 
-            if (message.uid == null &&
+            if (message.uid == null && message.zoho_id == null && message.graph_id == null &&
                     message.accountProtocol == EntityAccount.TYPE_IMAP &&
                     (EntityFolder.DRAFTS.equals(message.folderType) ||
                             EntityFolder.SENT.equals(message.folderType))) {
@@ -3380,6 +3472,10 @@ public class FragmentMessages extends FragmentBase
                     redraw(null);
                     return;
                 }
+                if (message.isGmailActionPending()) {
+                    redraw(viewHolder);
+                    return;
+                }
 
                 boolean expanded = iProperties.getValue("expanded", message.id);
 
@@ -3419,7 +3515,7 @@ public class FragmentMessages extends FragmentBase
                     return;
                 }
 
-                if (message.uid == null &&
+                if (message.uid == null && message.zoho_id == null && message.graph_id == null &&
                         message.accountProtocol == EntityAccount.TYPE_IMAP &&
                         (EntityFolder.DRAFTS.equals(message.folderType) ||
                                 EntityFolder.SENT.equals(message.folderType)) &&
@@ -3643,8 +3739,18 @@ public class FragmentMessages extends FragmentBase
                                     popupMenu.getMenu().add(Menu.NONE, R.string.title_report_spam, order++, R.string.title_report_spam)
                                             .setIcon(R.drawable.twotone_report_24);
                                 }
-                                popupMenu.getMenu().add(Menu.NONE, R.string.title_delete_permanently, order++, R.string.title_delete_permanently)
-                                        .setIcon(R.drawable.twotone_delete_forever_24);
+                                boolean gmailDraft = (message.gmail_id != null &&
+                                        (EntityFolder.DRAFTS.equals(message.folderType) ||
+                                                GmailLabelFolder.hasLabel(message.labels, "DRAFT")));
+                                boolean zohoPermanentDelete = (message.zoho_id != null &&
+                                        (EntityFolder.TRASH.equals(message.folderType) ||
+                                                EntityFolder.JUNK.equals(message.folderType)));
+                                boolean showPermanentDelete = !gmailDraft && message.graph_id == null &&
+                                        (message.zoho_id == null || zohoPermanentDelete);
+                                if (showPermanentDelete)
+                                    popupMenu.getMenu().add(Menu.NONE, R.string.title_delete_permanently,
+                                                    order++, R.string.title_delete_permanently)
+                                            .setIcon(R.drawable.twotone_delete_forever_24);
 
                                 popupMenu.insertIcons(context);
 
@@ -3699,7 +3805,14 @@ public class FragmentMessages extends FragmentBase
                                             onSwipeJunk(message);
                                             return true;
                                         } else if (itemId == R.string.title_delete_permanently) {
-                                            onSwipeDelete(message, null);
+                                            if (message.gmail_id != null &&
+                                                    (EntityFolder.DRAFTS.equals(message.folderType) ||
+                                                            GmailLabelFolder.hasLabel(message.labels, "DRAFT")))
+                                                return false;
+                                            onSwipeDelete(message, null, message.gmail_id != null ||
+                                                    (message.zoho_id != null &&
+                                                            (EntityFolder.TRASH.equals(message.folderType) ||
+                                                                    EntityFolder.JUNK.equals(message.folderType))));
                                             return true;
                                         }
                                         return false;
@@ -3922,28 +4035,45 @@ public class FragmentMessages extends FragmentBase
         }
 
         private void onSwipeDelete(@NonNull TupleMessageEx message, RecyclerView.ViewHolder vh) {
+            boolean gmailDraft = (EntityFolder.DRAFTS.equals(message.folderType) ||
+                    GmailLabelFolder.hasLabel(message.labels, "DRAFT"));
+            boolean gmailPermanent = GmailTrashDeleteAction.isPermanentDeleteInTrashOrSpam(
+                    message.gmail_id != null, message.gmail_id != null,
+                    !gmailDraft, message.folderType);
+            boolean nativePermanent = (message.isNativeRestMessage() &&
+                    MessageSelectionCapabilities.isTrashOrSpam(message.folderType));
+            onSwipeDelete(message, vh, gmailPermanent || nativePermanent);
+        }
+
+        private void onSwipeDelete(@NonNull TupleMessageEx message, RecyclerView.ViewHolder vh,
+                                   boolean permanent) {
             boolean leave_deleted =
                     (message.accountProtocol == EntityAccount.TYPE_POP &&
                             message.accountLeaveDeleted);
+            boolean gmailSoftDelete = (message.gmail_id != null && !permanent);
 
             Bundle args = new Bundle();
             if (leave_deleted)
                 args.putString("question", getResources()
                         .getQuantityString(R.plurals.title_moving_messages, 1, 1));
+            else if (gmailSoftDelete)
+                args.putString("question", getString(R.string.title_ask_trash));
             else
                 args.putString("question", getString(R.string.title_ask_delete));
             args.putString("remark", message.getRemark());
             args.putLong("id", message.id);
             args.putInt("faq", 160);
-            args.putString("notagain", "delete_asked");
-            if (!leave_deleted)
+            if (!permanent)
+                args.putString("notagain", "delete_asked");
+            if (!leave_deleted && !gmailSoftDelete)
                 args.putString("accept", getString(R.string.title_ask_delete_accept));
             args.putBoolean("warning", true);
+            args.putBoolean("permanent", permanent);
 
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
             boolean delete_asked = prefs.getBoolean("delete_asked", false);
             final int undo_timeout = prefs.getInt("undo_timeout", 5000);
-            if (delete_asked) {
+            if (GmailMailMutator.shouldSkipSingleDeleteConfirmation(permanent, delete_asked)) {
                 if (leave_deleted) {
                     new SimpleTask<Void>() {
                         @Override
@@ -4620,12 +4750,15 @@ public class FragmentMessages extends FragmentBase
 
     private boolean canMove(TupleMessageEx message) {
         boolean pop = (message.accountProtocol == EntityAccount.TYPE_POP);
-        boolean move = !(message.folderReadOnly || message.uid == null) ||
+        boolean move = (!message.folderReadOnly &&
+                (message.uid != null || message.zoho_id != null || message.graph_id != null)) ||
                 (pop && EntityFolder.TRASH.equals(message.folderType));
         return move;
     }
 
     private void onMenuMove(TupleMessageEx message) {
+        if (message.gmail_id != null && EntityFolder.SENT.equals(message.folderType))
+            return;
         if (message.accountProtocol == EntityAccount.TYPE_POP &&
                 EntityFolder.TRASH.equals(message.folderType) && !message.accountLeaveDeleted) {
             Bundle args = new Bundle();
@@ -4662,7 +4795,7 @@ public class FragmentMessages extends FragmentBase
         args.putLongArray("disabled", disabled);
         args.putLong("message", message.id);
         args.putBoolean("copy", false);
-        args.putBoolean("cancopy", true);
+        args.putBoolean("cancopy", message.zoho_id == null);
         args.putBoolean("similar", false);
 
         FragmentDialogSelectFolder fragment = new FragmentDialogSelectFolder();
@@ -4697,7 +4830,7 @@ public class FragmentMessages extends FragmentBase
             protected MoreResult onExecute(Context context, Bundle args) {
                 long[] ids = args.getLongArray("ids");
                 boolean threading = args.getBoolean("threading");
-                return MoreResult.get(context, ids, threading, false);
+                return MoreResult.get(context, ids, threading, false, folder);
             }
 
             @Override
@@ -4707,15 +4840,18 @@ public class FragmentMessages extends FragmentBase
                 final Context context = getContext();
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
                 boolean flags = prefs.getBoolean("flags", true);
+                boolean canModifyMailbox = MessageSelectionCapabilities.canModifySelection(
+                        result.read_only, result.gmailApiReadOnly,
+                        result.graphApiReadOnly, result.zohoApiReadOnly);
 
                 PopupMenuLifecycle popupMenu = new PopupMenuLifecycle(context, getViewLifecycleOwner(), fabMore);
 
                 int order = 0;
 
-                if (result.unseen) // Unseen, not draft
+                if (canModifyMailbox && result.unseen) // Unseen, not draft
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_seen, order++, R.string.title_seen)
                             .setIcon(R.drawable.twotone_drafts_24);
-                if (result.seen) // Seen, not draft
+                if (canModifyMailbox && result.seen) // Seen, not draft
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_unseen, order++, R.string.title_unseen)
                             .setIcon(R.drawable.twotone_mail_24);
 
@@ -4729,54 +4865,62 @@ public class FragmentMessages extends FragmentBase
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_unhide, order++, R.string.title_unhide)
                             .setIcon(R.drawable.twotone_visibility_24);
 
-                if (result.unflagged && flags)
+                if (canModifyMailbox && result.unflagged && flags)
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_flag, order++, R.string.title_flag)
                             .setIcon(R.drawable.twotone_star_24);
-                if (result.flagged && flags)
+                if (canModifyMailbox && result.flagged && flags)
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_unflag, order++, R.string.title_unflag)
                             .setIcon(R.drawable.twotone_star_border_24);
-                if ((result.unflagged || result.flagged) && flags)
+                if (canModifyMailbox && (result.unflagged || result.flagged) && flags)
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_flag_color, order++, R.string.title_flag_color)
                             .setIcon(R.drawable.twotone_auto_awesome_24);
 
-                SubMenu importance = popupMenu.getMenu()
-                        .addSubMenu(Menu.NONE, Menu.NONE, order++, R.string.title_set_importance)
-                        .setIcon(R.drawable.twotone_north_24);
-                importance.add(Menu.NONE, R.string.title_importance_high, 1, R.string.title_importance_high)
-                        .setIcon(R.drawable.twotone_north_24)
-                        .setEnabled(!EntityMessage.PRIORITIY_HIGH.equals(result.importance));
-                importance.add(Menu.NONE, R.string.title_importance_normal, 2, R.string.title_importance_normal)
-                        .setIcon(R.drawable.twotone_horizontal_rule_24)
-                        .setEnabled(!EntityMessage.PRIORITIY_NORMAL.equals(result.importance));
-                importance.add(Menu.NONE, R.string.title_importance_low, 3, R.string.title_importance_low)
-                        .setIcon(R.drawable.twotone_south_24)
-                        .setEnabled(!EntityMessage.PRIORITIY_LOW.equals(result.importance));
+                if (canModifyMailbox && !result.graphApiSelected && !result.zohoApiSelected) {
+                    SubMenu importance = popupMenu.getMenu()
+                            .addSubMenu(Menu.NONE, Menu.NONE, order++, R.string.title_set_importance)
+                            .setIcon(R.drawable.twotone_north_24);
+                    importance.add(Menu.NONE, R.string.title_importance_high, 1, R.string.title_importance_high)
+                            .setIcon(R.drawable.twotone_north_24)
+                            .setEnabled(!EntityMessage.PRIORITIY_HIGH.equals(result.importance));
+                    importance.add(Menu.NONE, R.string.title_importance_normal, 2, R.string.title_importance_normal)
+                            .setIcon(R.drawable.twotone_horizontal_rule_24)
+                            .setEnabled(!EntityMessage.PRIORITIY_NORMAL.equals(result.importance));
+                    importance.add(Menu.NONE, R.string.title_importance_low, 3, R.string.title_importance_low)
+                            .setIcon(R.drawable.twotone_south_24)
+                            .setEnabled(!EntityMessage.PRIORITIY_LOW.equals(result.importance));
+                }
 
-                if (ids.length < MAX_SEND_RAW)
+                if (ids.length < MAX_SEND_RAW && !result.graphApiSelected)
                     popupMenu.getMenu().add(Menu.NONE, R.string.title_raw_send, order++, R.string.title_raw_send)
                             .setIcon(R.drawable.twotone_attach_email_24);
 
-                if (result.canInbox()) // not is inbox
+                if (canModifyMailbox && result.canInbox()) // not is inbox
                     popupMenu.getMenu().add(Menu.FIRST, R.string.title_folder_inbox, order++, R.string.title_folder_inbox)
                             .setIcon(R.drawable.twotone_move_to_inbox_24);
 
-                if (result.canArchive()) // has archive and not is archive
+                if (canModifyMailbox && result.canMove() &&
+                        (result.graphApiSelected || result.zohoApiSelected || result.gmailApiSelected))
+                    popupMenu.getMenu().add(Menu.FIRST, R.string.title_move_to_folder, order++, R.string.title_move_to_folder)
+                            .setIcon(R.drawable.twotone_drive_file_move_24);
+
+                if (canModifyMailbox && result.canArchive()) // has archive and not is archive
                     popupMenu.getMenu().add(Menu.FIRST, R.string.title_archive, order++, R.string.title_archive)
                             .setIcon(R.drawable.twotone_archive_24);
 
-                if (result.canJunk()) // has junk and not junk/drafts
+                if (canModifyMailbox && result.canJunk()) // has junk and not junk/drafts
                     popupMenu.getMenu().add(Menu.FIRST, R.string.title_spam, order++, R.string.title_spam)
                             .setIcon(R.drawable.twotone_report_24);
 
-                if (result.canTrash()) // not trash and has trash and not is junk
+                if (canModifyMailbox && result.canTrash()) // not trash and has trash and not is junk
                     popupMenu.getMenu().add(Menu.FIRST, R.string.title_trash, order++, R.string.title_trash)
                             .setIcon(R.drawable.twotone_delete_24);
 
-                if (result.canDelete())
+                if (canModifyMailbox && result.canDeletePermanently())
                     popupMenu.getMenu().add(Menu.FIRST, R.string.title_delete_permanently, order++, R.string.title_delete_permanently)
                             .setIcon(R.drawable.twotone_delete_forever_24);
 
-                if (!result.read_only) {
+                if (canModifyMailbox && !result.graphApiSelected && !result.zohoApiSelected &&
+                        !result.gmailApiSelected) {
                     for (EntityAccount account : result.imapAccounts) {
                         String title = getString(R.string.title_move_to_account, account.name);
                         SpannableString ssb = new SpannableString(title);
@@ -4796,12 +4940,19 @@ public class FragmentMessages extends FragmentBase
                     }
                 }
 
-                if (result.copyto != null)
+                if (canModifyMailbox && !result.graphApiSelected && !result.zohoApiSelected &&
+                        !result.gmailApiSelected && result.copyto != null)
                     popupMenu.getMenu().add(Menu.FIRST, R.string.title_copy_to, order++, R.string.title_copy_to)
                             .setIcon(R.drawable.twotone_file_copy_24);
 
-                popupMenu.getMenu().add(Menu.FIRST, R.string.title_manage_keywords, order++, R.string.title_manage_keywords)
-                        .setIcon(R.drawable.twotone_label_important_24);
+                if (canModifyMailbox && result.gmailApiSingleAccount)
+                    popupMenu.getMenu().add(Menu.FIRST, R.string.title_manage_labels, order++, R.string.title_manage_labels)
+                            .setIcon(R.drawable.twotone_label_24);
+
+                if (canModifyMailbox && !result.graphApiSelected && !result.zohoApiSelected &&
+                        !result.gmailApiSelected)
+                    popupMenu.getMenu().add(Menu.FIRST, R.string.title_manage_keywords, order++, R.string.title_manage_keywords)
+                            .setIcon(R.drawable.twotone_label_important_24);
 
                 if (ids.length == 1)
                     popupMenu.getMenu().add(Menu.FIRST, R.string.title_search_sender, order++, R.string.title_search_sender)
@@ -4853,6 +5004,14 @@ public class FragmentMessages extends FragmentBase
                         } else if (itemId == R.string.title_folder_inbox) {
                             onActionMoveSelection(EntityFolder.INBOX, false);
                             return true;
+                        } else if (itemId == R.string.title_move_to_folder) {
+                            if (result.graphApiSelected && result.copyto != null && result.copyto.isGraphApi())
+                                onActionMoveSelectionAccount(result.copyto.id, false, result.folders);
+                            else if (result.zohoApiSelected && result.canMove() && result.zohoApiAccount != null)
+                                onActionMoveSelectionAccount(result.zohoApiAccount.id, false, result.folders, false);
+                            else if (result.gmailApiSelected && result.canMove() && result.gmailApiAccount != null)
+                                onActionMoveSelectionGmail(result.gmailApiAccount.id, result.folders);
+                            return true;
                         } else if (itemId == R.string.title_archive) {
                             onActionMoveSelection(EntityFolder.ARCHIVE, false);
                             return true;
@@ -4877,6 +5036,10 @@ public class FragmentMessages extends FragmentBase
                             return true;
                         } else if (itemId == R.string.title_manage_keywords) {
                             onActionManageKeywords(false, result.hasPop);
+                            return true;
+                        } else if (itemId == R.string.title_manage_labels) {
+                            if (result.gmailApiSingleAccount && result.gmailApiAccount != null)
+                                onActionManageGmailLabelsSelection(result.gmailApiAccount.id);
                             return true;
                         } else if (itemId == R.string.title_search_sender) {
                             long[] ids = getSelection();
@@ -4941,10 +5104,16 @@ public class FragmentMessages extends FragmentBase
                         if (message == null)
                             continue;
 
+                        EntityAccount account = db.account().getAccount(message.account);
                         List<EntityMessage> messages = db.message().getMessagesByThread(
                                 message.account, message.thread, threading ? null : id, seen ? null : message.folder);
                         for (EntityMessage threaded : messages)
-                            if (threaded.ui_seen != seen)
+                            if (MessageSelectionCapabilities.canQueueNativeReadFlag(
+                                    threaded.isNativeRestMessage(),
+                                    account != null && account.isGmailApi(), threaded.gmail_id != null,
+                                    account != null && account.isZohoApi(), threaded.zoho_id != null,
+                                    account != null && account.isGraphApi(), threaded.graph_id != null) &&
+                                    threaded.ui_seen != seen)
                                 EntityOperation.queue(context, threaded, EntityOperation.SEEN, seen);
                     }
 
@@ -5066,10 +5235,16 @@ public class FragmentMessages extends FragmentBase
                         if (message == null)
                             continue;
 
+                        EntityAccount account = db.account().getAccount(message.account);
                         List<EntityMessage> messages = db.message().getMessagesByThread(
                                 message.account, message.thread, threading ? null : id, flagged ? message.folder : null);
                         for (EntityMessage threaded : messages)
-                            if (threaded.ui_flagged != flagged || !Objects.equals(threaded.color, color))
+                            if (MessageSelectionCapabilities.canQueueNativeReadFlag(
+                                    threaded.isNativeRestMessage(),
+                                    account != null && account.isGmailApi(), threaded.gmail_id != null,
+                                    account != null && account.isZohoApi(), threaded.zoho_id != null,
+                                    account != null && account.isGraphApi(), threaded.graph_id != null) &&
+                                    (threaded.ui_flagged != flagged || !Objects.equals(threaded.color, color)))
                                 EntityOperation.queue(context, threaded, EntityOperation.FLAG, flagged, color);
                     }
 
@@ -5136,6 +5311,11 @@ public class FragmentMessages extends FragmentBase
                         List<EntityMessage> messages = db.message().getMessagesByThread(
                                 message.account, message.thread, threading ? null : id, null);
                         for (EntityMessage threaded : messages) {
+                            if (!MessageSelectionCapabilities.canSetImportance(
+                                    account.isNativeRestApi(), account.isGmailApi(),
+                                    threaded.gmail_id != null && threaded.gmail_id.length() > 0,
+                                    account.isGraphApi(), account.isZohoApi()))
+                                continue;
                             db.message().setMessageImportance(threaded.id, importance);
 
                             EntityOperation.queue(context, threaded, EntityOperation.KEYWORD,
@@ -5182,6 +5362,9 @@ public class FragmentMessages extends FragmentBase
             protected List<Long> onExecute(Context context, Bundle args) {
                 long[] selected = args.getLongArray("selected");
                 List<Long> ids = new ArrayList<>();
+                List<Long> gmailMessageIds = new ArrayList<>();
+                List<Long> gmailAccountIds = new ArrayList<>();
+                boolean apiPermanentConfirmation = false;
 
                 DB db = DB.getInstance(context);
                 try {
@@ -5198,16 +5381,34 @@ public class FragmentMessages extends FragmentBase
 
                         List<EntityMessage> messages = db.message().getMessagesByThread(
                                 message.account, message.thread, threading ? null : id, message.folder);
-                        for (EntityMessage threaded : messages)
-                            if (!threaded.ui_hide &&
-                                    (threaded.uid != null || account.protocol != EntityAccount.TYPE_IMAP))
+                        for (EntityMessage threaded : messages) {
+                            EntityFolder threadedFolder = db.folder().getFolder(threaded.folder);
+                            boolean graphWritable = (account.isGraphApi() && threaded.graph_id != null &&
+                                    threadedFolder != null && threadedFolder.selectable && !threadedFolder.read_only);
+                            boolean zohoWritable = ZohoMailMutator.isWritableMessage(account, threadedFolder, threaded);
+                            boolean gmailPermanent = (account.isGmailApi() &&
+                                    GmailMailMutator.canDeleteFromGmail(account, threadedFolder, threaded));
+                            if ((!threaded.isNativeRestMessage() || graphWritable || zohoWritable || gmailPermanent) &&
+                                    !threaded.ui_hide &&
+                                    (threaded.uid != null || account.protocol != EntityAccount.TYPE_IMAP ||
+                                            graphWritable || zohoWritable || gmailPermanent)) {
                                 ids.add(threaded.id);
+                                if (gmailPermanent) {
+                                    gmailMessageIds.add(threaded.id);
+                                    gmailAccountIds.add(account.id);
+                                }
+                                apiPermanentConfirmation |= (gmailPermanent || graphWritable || zohoWritable);
+                            }
+                        }
                     }
 
                     if (ids.size() == 1) {
                         EntityMessage message = db.message().getMessage(ids.get(0));
                         args.putString("remark", message == null ? null : message.getRemark());
                     }
+                    args.putBoolean("api_permanent_confirmation", apiPermanentConfirmation);
+                    args.putLongArray("gmail_message_ids", Helper.toLongArray(gmailMessageIds));
+                    args.putLongArray("gmail_account_ids", Helper.toLongArray(gmailAccountIds));
 
                     db.setTransactionSuccessful();
                 } finally {
@@ -5227,11 +5428,17 @@ public class FragmentMessages extends FragmentBase
                 aargs.putInt("faq", 160);
                 aargs.putLongArray("ids", Helper.toLongArray(ids));
                 aargs.putBoolean("warning", true);
+                aargs.putBoolean("permanent", true);
+                aargs.putLongArray("gmail_message_ids", args.getLongArray("gmail_message_ids"));
+                aargs.putLongArray("gmail_account_ids", args.getLongArray("gmail_account_ids"));
+                aargs.putBoolean("api_permanent_confirmation",
+                        args.getBoolean("api_permanent_confirmation"));
 
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
                 boolean delete_confirmation = prefs.getBoolean("delete_confirmation", true);
 
-                if (delete_confirmation) {
+                if (MessageSelectionCapabilities.shouldShowPermanentDeleteConfirmation(
+                        delete_confirmation, args.getBoolean("api_permanent_confirmation"))) {
                     FragmentDialogAsk ask = new FragmentDialogAsk();
                     ask.setArguments(aargs);
                     ask.setTargetFragment(FragmentMessages.this, REQUEST_MESSAGES_DELETE);
@@ -5336,8 +5543,12 @@ public class FragmentMessages extends FragmentBase
                                 move_thread_all || move_thread_sent ? null : message.folder);
                         for (EntityMessage threaded : messages) {
                             EntityFolder sourceFolder = db.folder().getFolder(threaded.folder);
+                            boolean gmailWritableSource = (account.isGmailApi() &&
+                                    GmailMailMutator.isWritableMessage(account, sourceFolder, threaded));
                             if (sourceFolder == null ||
-                                    sourceFolder.read_only ||
+                                    (sourceFolder.read_only && !gmailWritableSource) ||
+                                    (account.isGmailApi() &&
+                                            !GmailMailMutator.canMoveToTarget(account, sourceFolder, threaded, targetFolder)) ||
                                     sourceFolder.id.equals(targetFolder.id))
                                 continue;
 
@@ -5382,12 +5593,22 @@ public class FragmentMessages extends FragmentBase
     }
 
     private void onActionMoveSelectionAccount(long account, boolean copy, List<Long> disabled) {
+        onActionMoveSelectionAccount(account, copy, disabled, true);
+    }
+
+    private void onActionMoveSelectionAccount(long account, boolean copy, List<Long> disabled, boolean cancopy) {
+        onActionMoveSelectionAccount(account, copy, disabled, cancopy, false);
+    }
+
+    private void onActionMoveSelectionAccount(long account, boolean copy, List<Long> disabled,
+                                              boolean cancopy, boolean gmailApi) {
         Bundle args = new Bundle();
         args.putInt("icon", copy ? R.drawable.twotone_file_copy_24 : R.drawable.twotone_drive_file_move_24);
         args.putString("title", getString(copy ? R.string.title_copy_to : R.string.title_move_to_folder));
         args.putLong("account", account);
         args.putBoolean("copy", copy);
-        args.putBoolean("cancopy", true);
+        args.putBoolean("cancopy", cancopy);
+        args.putBoolean("gmail_api", gmailApi);
         args.putLongArray("disabled", Helper.toLongArray(disabled));
         args.putLongArray("messages", getSelection());
         args.putBoolean("move_thread_all", move_thread_all);
@@ -5412,6 +5633,142 @@ public class FragmentMessages extends FragmentBase
         fragment.show(getParentFragmentManager(), "keyword:manage");
     }
 
+    private void onActionManageGmailLabelsSelection(long accountId) {
+        Bundle args = new Bundle();
+        args.putLong("account", accountId);
+        args.putLongArray("ids", getSelection());
+        new SimpleTask<Bundle>() {
+            @Override
+            protected Bundle onExecute(Context context, Bundle args) {
+                long accountId = args.getLong("account");
+                long[] ids = args.getLongArray("ids");
+                DB db = DB.getInstance(context);
+                EntityAccount account = db.account().getAccount(accountId);
+                if (account == null || !account.isGmailApi() || ids == null || ids.length == 0)
+                    return null;
+
+                List<EntityFolder> labels = db.folder().getFolders(accountId, false, true);
+                List<GmailLabelControl.Choice> writable =
+                        GmailLabelControl.getUserLabelChoices(labels, accountId);
+                Collator collator = Collator.getInstance(Locale.getDefault());
+                collator.setStrength(Collator.SECONDARY);
+                Collections.sort(writable, (left, right) -> collator.compare(
+                        left.displayName, right.displayName));
+
+                Set<String> common = null;
+                for (long id : ids) {
+                    EntityMessage message = db.message().getMessage(id);
+                    if (message == null || message.account != accountId || message.gmail_id == null) {
+                        Bundle stale = new Bundle();
+                        stale.putLong("account", accountId);
+                        stale.putBoolean("stale", true);
+                        return stale;
+                    }
+                    Set<String> current = new HashSet<>();
+                    if (message.labels != null)
+                        current.addAll(Arrays.asList(message.labels));
+                    if (common == null)
+                        common = current;
+                    else
+                        common.retainAll(current);
+                }
+
+                Bundle result = new Bundle();
+                result.putLong("account", accountId);
+                result.putLongArray("ids", ids);
+                result.putBoolean("gmail_api", true);
+                List<String> folderIds = new ArrayList<>();
+                List<String> folderNames = new ArrayList<>();
+                for (String labelId : GmailMailMutator.getManuallyApplicableSystemLabelIds()) {
+                    folderIds.add(labelId);
+                    folderNames.add(getGmailManualLabelName(context, labelId));
+                }
+                for (GmailLabelControl.Choice label : writable) {
+                    folderIds.add(label.id);
+                    folderNames.add(label.displayName);
+                }
+                result.putStringArray("folders", folderIds.toArray(new String[0]));
+                result.putStringArray("display", folderNames.toArray(new String[0]));
+                result.putStringArray("labels", common == null ? new String[0] : common.toArray(new String[0]));
+                return result;
+            }
+
+            @Override
+            protected void onExecuted(Bundle args, Bundle result) {
+                if (result == null)
+                    return;
+                if (result.getBoolean("stale")) {
+                    long accountId = result.getLong("account");
+                    ServiceSynchronize.reload(getContext(), accountId, false,
+                            "Gmail label picker source stale");
+                    if (view != null)
+                        Helper.setSnackbarOptions(Snackbar.make(view,
+                                R.string.title_gmail_action_refresh, Snackbar.LENGTH_LONG)).show();
+                    return;
+                }
+                FragmentDialogLabelsManage fragment = new FragmentDialogLabelsManage();
+                fragment.setArguments(result);
+                fragment.show(getParentFragmentManager(), "labels:manage:gmail");
+            }
+
+            @Override
+            protected void onException(Bundle args, Throwable ex) {
+                Log.unexpectedError(getParentFragmentManager(), ex);
+            }
+        }.execute(this, args, "labels:manage:gmail");
+    }
+
+    private static String getGmailManualLabelName(Context context, String labelId) {
+        if ("INBOX".equals(labelId))
+            return context.getString(R.string.title_folder_inbox);
+        if ("TRASH".equals(labelId))
+            return context.getString(R.string.title_folder_trash);
+        if ("SPAM".equals(labelId))
+            return context.getString(R.string.title_folder_junk);
+        if (labelId != null && labelId.startsWith("CATEGORY_")) {
+            String category = labelId.substring("CATEGORY_".length()).toLowerCase(Locale.ROOT);
+            return category.substring(0, 1).toUpperCase(Locale.getDefault()) + category.substring(1);
+        }
+        return labelId;
+    }
+
+    private void onActionMoveSelectionGmail(long accountId, List<Long> sourceFolders) {
+        Bundle args = new Bundle();
+        args.putLong("account", accountId);
+        args.putLongArray("source_folders", Helper.toLongArray(sourceFolders));
+        new SimpleTask<List<Long>>() {
+            @Override
+            protected List<Long> onExecute(Context context, Bundle args) {
+                long accountId = args.getLong("account");
+                long[] source = args.getLongArray("source_folders");
+                Set<Long> disabled = new HashSet<>();
+                if (source != null)
+                    for (long id : source)
+                        disabled.add(id);
+                DB db = DB.getInstance(context);
+                EntityAccount account = db.account().getAccount(accountId);
+                if (account == null || !account.isGmailApi())
+                    return new ArrayList<>(disabled);
+                List<EntityFolder> folders = db.folder().getFolders(accountId, false, true);
+                if (folders != null)
+                    for (EntityFolder folder : folders)
+                        if (!GmailMailMutator.isValidMovePickerTarget(account, folder))
+                            disabled.add(folder.id);
+                return new ArrayList<>(disabled);
+            }
+
+            @Override
+            protected void onExecuted(Bundle args, List<Long> disabled) {
+                onActionMoveSelectionAccount(accountId, false, disabled, false, true);
+            }
+
+            @Override
+            protected void onException(Bundle args, Throwable ex) {
+                Log.unexpectedError(getParentFragmentManager(), ex);
+            }
+        }.execute(this, args, "messages:move:gmail");
+    }
+
     private void onActionMoveSelection(Bundle args) {
         args.putLongArray("ids", getSelection());
 
@@ -5425,38 +5782,157 @@ public class FragmentMessages extends FragmentBase
                 boolean move_thread_sent = args.getBoolean("move_thread_sent");
                 boolean filter_archive = args.getBoolean("filter_archive");
 
-                ArrayList<MessageTarget> result = new ArrayList<>();
+                MoveTargetList result = new MoveTargetList();
 
                 DB db = DB.getInstance(context);
                 try {
                     db.beginTransaction();
 
                     EntityFolder targetFolder = db.folder().getFolder(tid);
-                    if (targetFolder == null)
+                    if (targetFolder == null) {
+                        if (args.getBoolean("gmail_api") && ids != null && ids.length > 0) {
+                            result.gmailRejected = ids.length;
+                            result.gmailAccount = args.getLong("account", -1L);
+                            GmailMutationLog.callback(EntityOperation.MOVE, "other",
+                                    "destination_folder_missing", null);
+                            if (result.gmailAccount > 0)
+                                ServiceSynchronize.reload(context, result.gmailAccount, false,
+                                        "Gmail move target stale");
+                        }
                         return result;
+                    }
 
                     EntityAccount targetAccount = db.account().getAccount(targetFolder.account);
-                    if (targetAccount == null)
+                    if (targetAccount == null) {
+                        if (args.getBoolean("gmail_api") && ids != null && ids.length > 0) {
+                            result.gmailRejected = ids.length;
+                            result.gmailAccount = args.getLong("account", -1L);
+                            GmailMutationLog.callback(EntityOperation.MOVE,
+                                    GmailMutationLog.targetType(targetFolder.type),
+                                    "destination_account_missing", null);
+                            if (result.gmailAccount > 0)
+                                ServiceSynchronize.reload(context, result.gmailAccount, false,
+                                        "Gmail move account stale");
+                        }
                         return result;
+                    }
 
                     for (long id : ids) {
                         EntityMessage message = db.message().getMessage(id);
-                        if (message == null)
+                        if (message == null) {
+                            if (args.getBoolean("gmail_api")) {
+                                result.gmailRejected++;
+                                result.gmailAccount = targetAccount.id;
+                                GmailMutationLog.callback(EntityOperation.MOVE,
+                                        GmailMutationLog.targetType(targetFolder.type),
+                                        "message_missing", null);
+                            }
                             continue;
+                        }
 
                         EntityAccount sourceAccount = db.account().getAccount(message.account);
-                        if (sourceAccount == null)
+                        if (sourceAccount == null) {
+                            if (args.getBoolean("gmail_api")) {
+                                result.gmailRejected++;
+                                result.gmailAccount = targetAccount.id;
+                                GmailMutationLog.callback(EntityOperation.MOVE,
+                                        GmailMutationLog.targetType(targetFolder.type),
+                                        "account_missing", null);
+                            }
                             continue;
+                        }
+                        if ((targetAccount.isGmailApi() && !sourceAccount.isGmailApi()) ||
+                                (targetAccount.isGraphApi() && !sourceAccount.isGraphApi()) ||
+                                (targetAccount.isZohoApi() && !sourceAccount.isZohoApi())) {
+                            String provider = ApiMutationLog.provider(sourceAccount);
+                            if (provider == null)
+                                provider = ApiMutationLog.provider(targetAccount);
+                            if (provider != null && !"gmail".equals(provider))
+                                ApiMutationLog.callback(provider, EntityOperation.MOVE,
+                                        ApiMutationLog.targetType(targetFolder.type), "account_mismatch");
+                            if (sourceAccount.isGmailApi() || targetAccount.isGmailApi()) {
+                                result.gmailRejected++;
+                                result.gmailAccount = sourceAccount.isGmailApi()
+                                        ? sourceAccount.id : targetAccount.id;
+                                GmailMutationLog.callback(EntityOperation.MOVE,
+                                        GmailMutationLog.targetType(targetFolder.type),
+                                        "target_account_mismatch", null);
+                            }
+                            continue;
+                        }
+                        if (sourceAccount.isGraphApi() &&
+                                !MessageSelectionCapabilities.canMoveGraphMessage(
+                                        true, copy, sourceAccount.id, targetAccount.isGraphApi(),
+                                        targetAccount.id, targetFolder.selectable, targetFolder.read_only,
+                                        targetFolder.graph_folder_id)) {
+                            ApiMutationLog.callback("graph", EntityOperation.MOVE,
+                                    ApiMutationLog.targetType(targetFolder.type),
+                                    (copy ? "copy_not_supported" :
+                                            (!targetAccount.isGraphApi() ||
+                                                    !Objects.equals(sourceAccount.id, targetAccount.id)
+                                                    ? "account_mismatch" : "invalid_target")));
+                            continue;
+                        }
+                        if (sourceAccount.isZohoApi() &&
+                                !ZohoMailMutator.isValidZohoMoveTarget(
+                                        sourceAccount, targetAccount, targetFolder, copy)) {
+                            ApiMutationLog.callback("zoho", EntityOperation.MOVE,
+                                    ApiMutationLog.targetType(targetFolder.type),
+                                    (copy ? "copy_not_supported" :
+                                            (!targetAccount.isZohoApi() ||
+                                                    !Objects.equals(sourceAccount.id, targetAccount.id)
+                                                    ? "account_mismatch" : "invalid_target")));
+                            continue;
+                        }
+                        if (sourceAccount.isGmailApi() &&
+                                (copy || !GmailMailMutator.isValidMovePickerTarget(sourceAccount, targetFolder) ||
+                                        !Objects.equals(sourceAccount.id, targetAccount.id))) {
+                            result.gmailRejected++;
+                            result.gmailAccount = sourceAccount.id;
+                            String reason = (copy ? "copy_not_supported" :
+                                    (!Objects.equals(sourceAccount.id, targetAccount.id)
+                                            ? "target_account_mismatch" : "invalid_target"));
+                            GmailMutationLog.callback(EntityOperation.MOVE,
+                                    GmailMutationLog.targetType(targetFolder.type), reason, null);
+                            continue;
+                        }
 
                         List<EntityMessage> messages = db.message().getMessagesByThread(
                                 message.account, message.thread, threading ? null : id,
                                 move_thread_all || move_thread_sent ? null : message.folder);
                         for (EntityMessage threaded : messages) {
                             EntityFolder sourceFolder = db.folder().getFolder(threaded.folder);
+                            boolean gmailWritableSource = (sourceAccount.isGmailApi() &&
+                                    GmailMailMutator.isWritableMessage(sourceAccount, sourceFolder, threaded));
                             if (sourceFolder == null ||
-                                    sourceFolder.read_only ||
-                                    sourceFolder.id.equals(targetFolder.id))
+                                    (sourceFolder.read_only && !gmailWritableSource) ||
+                                    (sourceAccount.isGmailApi() &&
+                                            !GmailMailMutator.canMoveToTarget(sourceAccount, sourceFolder, threaded, targetFolder)) ||
+                                    sourceFolder.id.equals(targetFolder.id)) {
+                                if (sourceAccount.isGraphApi())
+                                    ApiMutationLog.callback("graph", EntityOperation.MOVE,
+                                            ApiMutationLog.targetType(targetFolder.type),
+                                            (sourceFolder == null ? "source_folder_missing" : "invalid_target"));
+                                else if (sourceAccount.isZohoApi())
+                                    ApiMutationLog.callback("zoho", EntityOperation.MOVE,
+                                            ApiMutationLog.targetType(targetFolder.type),
+                                            (sourceFolder == null ? "source_folder_missing" : "invalid_target"));
+                                if (sourceAccount.isGmailApi()) {
+                                    result.gmailRejected++;
+                                    result.gmailAccount = sourceAccount.id;
+                                    GmailMutationLog.callback(EntityOperation.MOVE,
+                                            GmailMutationLog.targetType(targetFolder.type),
+                                            sourceFolder == null ? "source_folder_missing" : "invalid_target",
+                                            null);
+                                }
                                 continue;
+                            }
+                            if (sourceAccount.isZohoApi() &&
+                                    !ZohoMailMutator.isWritableMessage(sourceAccount, sourceFolder, threaded)) {
+                                ApiMutationLog.callback("zoho", EntityOperation.MOVE,
+                                        ApiMutationLog.targetType(targetFolder.type), "not_writable");
+                                continue;
+                            }
 
                             if (!threaded.folder.equals(message.folder) &&
                                     !(move_thread_all ||
@@ -5479,11 +5955,19 @@ public class FragmentMessages extends FragmentBase
                     db.endTransaction();
                 }
 
+                if (result.gmailRejected > 0 && result.gmailAccount > 0)
+                    ServiceSynchronize.reload(context, result.gmailAccount, false,
+                            "Gmail move picker result stale");
+
                 return result;
             }
 
             @Override
             protected void onExecuted(Bundle args, ArrayList<MessageTarget> result) {
+                if (result instanceof MoveTargetList &&
+                        ((MoveTargetList) result).gmailRejected > 0 && view != null)
+                    Helper.setSnackbarOptions(Snackbar.make(view,
+                            R.string.title_gmail_action_refresh, Snackbar.LENGTH_LONG)).show();
                 boolean copy = args.getBoolean("copy");
                 if (copy) {
                     moveAskConfirmed(result);
@@ -5556,12 +6040,13 @@ public class FragmentMessages extends FragmentBase
         }.execute(FragmentMessages.this, args, "messages:move");
     }
 
-    private void onActionDelete() {
+    private void onActionDelete(boolean permanentAction) {
         Bundle args = new Bundle();
         args.putLong("account", account);
         args.putString("thread", thread);
         args.putLong("id", id);
         args.putBoolean("filter_archive", filter_archive);
+        args.putBoolean("permanent", permanentAction);
 
         new SimpleTask<List<Long>>() {
             @Override
@@ -5570,6 +6055,7 @@ public class FragmentMessages extends FragmentBase
                 String thread = args.getString("thread");
                 long id = args.getLong("id");
                 boolean filter_archive = args.getBoolean("filter_archive");
+                boolean permanentAction = args.getBoolean("permanent");
 
                 ArrayList<Long> result = new ArrayList<>();
 
@@ -5585,15 +6071,52 @@ public class FragmentMessages extends FragmentBase
 
                     List<EntityMessage> messages = db.message().getMessagesByThread(
                             aid, thread, threading ? null : id, null);
+                    boolean gmailPermanent = false;
+                    if (account != null && account.isGmailApi())
+                        for (EntityMessage threaded : messages) {
+                            EntityFolder folder = db.folder().getFolder(threaded.folder);
+                            if ((!filter_archive || !EntityFolder.ARCHIVE.equals(folder.type)) &&
+                                    GmailTrashDeleteAction.isPermanentDeleteInTrashOrSpam(
+                                            true, threaded.gmail_id != null,
+                                            GmailMailMutator.canDeleteFromGmail(account, folder, threaded),
+                                            folder.type)) {
+                                gmailPermanent = true;
+                                break;
+                            }
+                    }
+                    boolean nativePermanent = (permanentAction && account != null &&
+                            (account.isGraphApi() || account.isZohoApi()));
+                    boolean permanent = (gmailPermanent || nativePermanent);
+                    args.putBoolean("gmail_permanent", gmailPermanent);
+                    boolean zohoSpamDelete = (account != null && account.isZohoApi());
+                    boolean hasZohoSpamMessage = false;
                     for (EntityMessage threaded : messages) {
                         EntityFolder folder = db.folder().getFolder(threaded.folder);
-                        if (!folder.read_only &&
-                                (!filter_archive || !EntityFolder.ARCHIVE.equals(folder.type)) &&
-                                !EntityFolder.DRAFTS.equals(folder.type) &&
-                                !EntityFolder.OUTBOX.equals(folder.type)
-                            /* sent, trash, junk */)
+                        boolean inSelectedDeleteScope = (gmailPermanent
+                                ? GmailTrashDeleteAction.isPermanentDeleteInTrashOrSpam(
+                                        account != null && account.isGmailApi(), threaded.gmail_id != null,
+                                        account != null && GmailMailMutator.canDeleteFromGmail(
+                                                account, folder, threaded), folder.type)
+                                : nativePermanent
+                                ? MessageSelectionCapabilities.isTrashOrSpam(folder.type)
+                                : (!folder.read_only &&
+                                        !EntityFolder.DRAFTS.equals(folder.type) &&
+                                        !EntityFolder.OUTBOX.equals(folder.type)));
+                        if (inSelectedDeleteScope &&
+                                (!filter_archive || !EntityFolder.ARCHIVE.equals(folder.type)))
                             result.add(threaded.id);
+
+                        if (filter_archive && EntityFolder.ARCHIVE.equals(folder.type))
+                            continue;
+                        if (!EntityFolder.JUNK.equals(folder.type))
+                            zohoSpamDelete = false;
+                        else
+                            hasZohoSpamMessage = true;
                     }
+                    args.putBoolean("zoho_spam_delete", zohoSpamDelete && hasZohoSpamMessage);
+                    permanent |= (zohoSpamDelete && hasZohoSpamMessage);
+                    args.putBoolean("permanent", permanent);
+                    args.putBoolean("api_permanent_confirmation", permanent);
 
                     if (result.size() == 1) {
                         EntityMessage message = db.message().getMessage(result.get(0));
@@ -5626,12 +6149,17 @@ public class FragmentMessages extends FragmentBase
                 aargs.putInt("faq", 160);
                 aargs.putLongArray("ids", Helper.toLongArray(ids));
                 aargs.putBoolean("warning", true);
+                aargs.putBoolean("permanent", args.getBoolean("permanent"));
+                aargs.putBoolean("zoho_spam_delete", args.getBoolean("zoho_spam_delete"));
+                aargs.putBoolean("api_permanent_confirmation", args.getBoolean("api_permanent_confirmation"));
 
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
                 boolean delete_asked = prefs.getBoolean("delete_asked", false);
                 boolean delete_confirmation = prefs.getBoolean("delete_confirmation", true);
 
-                if (leave_deleted ? delete_asked : !delete_confirmation) {
+                if (leave_deleted ? delete_asked :
+                        !MessageSelectionCapabilities.shouldShowPermanentDeleteConfirmation(
+                                delete_confirmation, args.getBoolean("api_permanent_confirmation"))) {
                     Intent data = new Intent();
                     data.putExtra("args", aargs);
                     onActivityResult(REQUEST_MESSAGES_DELETE, RESULT_OK, data);
@@ -5983,6 +6511,9 @@ public class FragmentMessages extends FragmentBase
     public void onPause() {
         super.onPause();
 
+        if (graphOpenTraceId != null)
+            ApiMutationLog.event("graph", "navigation", "navigate", "paused", graphOpenTraceId);
+
         final Context context = getContext();
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         prefs.unregisterOnSharedPreferenceChangeListener(this);
@@ -6303,7 +6834,7 @@ public class FragmentMessages extends FragmentBase
                 if (accounts != null)
                     for (EntityAccount account : accounts)
                         if (account.isGmail())
-                            if (account.auth_type == ServiceAuthenticator.AUTH_TYPE_GMAIL)
+                            if (account.isGmailApi())
                                 oauth++;
                             else if (account.auth_type == ServiceAuthenticator.AUTH_TYPE_PASSWORD)
                                 passwd++;
@@ -6721,7 +7252,11 @@ public class FragmentMessages extends FragmentBase
 
             boolean unselected = (selectionTracker == null || !selectionTracker.hasSelection());
             menu.findItem(R.id.menu_empty_trash).setVisible(EntityFolder.TRASH.equals(type) && folder && unselected);
-            menu.findItem(R.id.menu_empty_spam).setVisible(EntityFolder.JUNK.equals(type) && folder && unselected);
+            menu.findItem(R.id.menu_empty_spam).setVisible(
+                    EntityFolder.JUNK.equals(type) && folder && unselected &&
+                            (Boolean.FALSE.equals(zohoApiAccount) ||
+                                    (Boolean.TRUE.equals(zohoApiAccount) &&
+                                            Boolean.TRUE.equals(zohoSpamEmptySupported))));
 
             if ("time".equals(sort))
                 menu.findItem(R.id.menu_sort_on_time).setChecked(true);
@@ -6756,7 +7291,8 @@ public class FragmentMessages extends FragmentBase
             menu.findItem(R.id.menu_filter_unflagged).setVisible(folder);
             menu.findItem(R.id.menu_filter_unknown).setVisible(folder && !drafts && !sent);
             menu.findItem(R.id.menu_filter_snoozed).setVisible(folder && !drafts);
-            menu.findItem(R.id.menu_filter_deleted).setVisible(folder && !perform_expunge);
+            menu.findItem(R.id.menu_filter_deleted).setVisible(
+                    folder && !perform_expunge && !Boolean.TRUE.equals(zohoApiAccount));
             menu.findItem(R.id.menu_filter_duplicates).setVisible(viewType == AdapterMessage.ViewType.THREAD);
             menu.findItem(R.id.menu_filter_sent).setVisible(viewType == AdapterMessage.ViewType.THREAD);
             menu.findItem(R.id.menu_filter_trash).setVisible(viewType == AdapterMessage.ViewType.THREAD);
@@ -6826,8 +7362,11 @@ public class FragmentMessages extends FragmentBase
             menu.findItem(R.id.menu_force_sync).setVisible(viewType == AdapterMessage.ViewType.UNIFIED || primary_inbox);
             menu.findItem(R.id.menu_force_send).setVisible(outbox);
 
-            menu.findItem(R.id.menu_expunge).setVisible(viewType == AdapterMessage.ViewType.FOLDER &&
-                    (!perform_expunge || BuildConfig.DEBUG));
+            menu.findItem(R.id.menu_expunge).setVisible(
+                    viewType == AdapterMessage.ViewType.FOLDER && zohoApiAccount != null &&
+                            (Boolean.TRUE.equals(zohoApiAccount)
+                                    ? EntityFolder.TRASH.equals(type)
+                                    : (!perform_expunge || BuildConfig.DEBUG)));
 
             menu.findItem(R.id.menu_edit_properties).setVisible(viewType == AdapterMessage.ViewType.FOLDER && !outbox);
 
@@ -7571,33 +8110,8 @@ public class FragmentMessages extends FragmentBase
         args.putLong("folder", folder);
         args.putString("type", type);
 
-        new SimpleTask<Void>() {
-            @Override
-            protected Void onExecute(Context context, Bundle args) {
-                long fid = args.getLong("folder");
-                if (fid < 0)
-                    return null;
-
-                DB db = DB.getInstance(context);
-                EntityFolder folder = db.folder().getFolder(fid);
-                if (folder != null)
-                    args.putString("name", folder.getDisplayName(context));
-
-                return null;
-            }
-
-            @Override
-            protected void onExecuted(Bundle args, Void data) {
-                FragmentDialogSync sync = new FragmentDialogSync();
-                sync.setArguments(args);
-                sync.show(getParentFragmentManager(), "folder:months");
-            }
-
-            @Override
-            protected void onException(Bundle args, Throwable ex) {
-                Log.unexpectedError(getParentFragmentManager(), ex);
-            }
-        }.execute(this, args, "folder:months");
+        FetchMoreAction.open(getContext(), getViewLifecycleOwner(),
+                getParentFragmentManager(), args, "folder:months");
     }
 
     private void onMenuForceSync() {
@@ -7758,7 +8272,7 @@ public class FragmentMessages extends FragmentBase
                     protected MoreResult onExecute(Context context, Bundle args) {
                         long[] ids = args.getLongArray("ids");
                         boolean threading = args.getBoolean("threading");
-                        return MoreResult.get(context, ids, threading, true);
+                        return MoreResult.get(context, ids, threading, true, folder);
                     }
 
                     @Override
@@ -7785,6 +8299,9 @@ public class FragmentMessages extends FragmentBase
 
                         boolean inTrash = EntityFolder.TRASH.equals(type);
                         boolean inJunk = EntityFolder.JUNK.equals(type);
+                        boolean canModifyMailbox = MessageSelectionCapabilities.canModifySelection(
+                                result.read_only, result.gmailApiReadOnly,
+                                result.graphApiReadOnly, result.zohoApiReadOnly);
 
                         int count = 0;
 
@@ -7796,7 +8313,12 @@ public class FragmentMessages extends FragmentBase
                         if (archive)
                             count++;
 
-                        boolean delete = (more_delete && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.canDelete());
+                        boolean nativeDeleteInTrashOrSpam = (result.allSelectedInTrashOrSpam &&
+                                (result.gmailApiSelected || result.graphApiSelected || result.zohoApiSelected) &&
+                                result.canDelete());
+                        boolean delete = (count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS &&
+                                ((more_delete && result.canDeletePermanently()) ||
+                                        nativeDeleteInTrashOrSpam));
                         if (delete)
                             count++;
 
@@ -7805,7 +8327,8 @@ public class FragmentMessages extends FragmentBase
                             count++;
 
                         if (!delete && !trash && (inTrash || inJunk) &&
-                                more_trash && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.canDelete()) {
+                                more_trash && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS &&
+                                result.canDeletePermanently()) {
                             delete = true;
                             count++;
                         }
@@ -7818,34 +8341,38 @@ public class FragmentMessages extends FragmentBase
                         if (inbox)
                             count++;
 
-                        boolean keywords = (more_keywords && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS);
+                        boolean keywords = (canModifyMailbox && !result.graphApiSelected && !result.zohoApiSelected && more_keywords &&
+                                count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS);
                         if (keywords)
                             count++;
 
-                        boolean importance_high = (more_importance_high && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS &&
+                        boolean importance_high = (canModifyMailbox && !result.graphApiSelected && !result.zohoApiSelected && more_importance_high &&
+                                count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS &&
                                 !EntityMessage.PRIORITIY_HIGH.equals(result.importance));
                         if (importance_high)
                             count++;
 
-                        boolean importance_normal = (more_importance_normal && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS &&
+                        boolean importance_normal = (canModifyMailbox && !result.graphApiSelected && !result.zohoApiSelected && more_importance_normal &&
+                                count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS &&
                                 !EntityMessage.PRIORITIY_NORMAL.equals(result.importance));
                         if (importance_normal)
                             count++;
 
-                        boolean importance_low = (more_importance_low && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS &&
+                        boolean importance_low = (canModifyMailbox && !result.graphApiSelected && !result.zohoApiSelected && more_importance_low &&
+                                count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS &&
                                 !EntityMessage.PRIORITIY_LOW.equals(result.importance));
                         if (importance_low)
                             count++;
 
-                        boolean flag = (more_flag && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.unflagged);
+                        boolean flag = (canModifyMailbox && more_flag && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.unflagged);
                         if (flag)
                             count++;
 
-                        boolean unflag = (more_flag && !flag && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.flagged);
+                        boolean unflag = (canModifyMailbox && more_flag && !flag && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.flagged);
                         if (unflag)
                             count++;
 
-                        boolean flag_color = (more_flag_color && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && (result.unflagged || result.flagged));
+                        boolean flag_color = (canModifyMailbox && more_flag_color && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && (result.unflagged || result.flagged));
                         if (flag_color)
                             count++;
 
@@ -7857,11 +8384,11 @@ public class FragmentMessages extends FragmentBase
                         if (snooze)
                             count++;
 
-                        boolean unseen = (more_unseen && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.seen);
+                        boolean unseen = (canModifyMailbox && more_unseen && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.seen);
                         if (unseen)
                             count++;
 
-                        boolean seen = (more_seen && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.unseen);
+                        boolean seen = (canModifyMailbox && more_seen && count < FragmentDialogQuickActions.MAX_QUICK_ACTIONS && result.unseen);
                         if (seen)
                             count++;
 
@@ -8394,6 +8921,9 @@ public class FragmentMessages extends FragmentBase
                     EntityFolder archive;
 
                     boolean trashable = false;
+                    boolean gmailTrashDelete = false;
+                    boolean hasNativePermanentDelete = false;
+                    boolean allNativeDeletesInTrashOrSpam = true;
                     boolean snoozable = false;
                     boolean archivable = false;
                     Boolean junkOnly = null;
@@ -8420,7 +8950,26 @@ public class FragmentMessages extends FragmentBase
                             junkOnly = (junkOnly == null || junkOnly) &&
                                     EntityFolder.JUNK.equals(folder.type);
 
-                            if (!folder.read_only &&
+                            boolean gmailApi = (account != null && account.isGmailApi());
+                            boolean gmailMessageWritable = (gmailApi &&
+                                    GmailMailMutator.canDeleteFromGmail(account, folder, message));
+                            boolean graphMessageWritable = (account != null && account.isGraphApi() &&
+                                    message.graph_id != null && !folder.read_only && folder.selectable);
+                            boolean zohoMessageWritable = (account != null && account.isZohoApi() &&
+                                    ZohoMailMutator.isWritableMessage(account, folder, message));
+                            if ((gmailApi && GmailTrashDeleteAction.isPermanentDeleteInTrashOrSpam(
+                                    gmailApi, message.gmail_id != null, gmailMessageWritable, folder.type)))
+                                gmailTrashDelete = true;
+                            if (graphMessageWritable || zohoMessageWritable) {
+                                hasNativePermanentDelete = true;
+                                allNativeDeletesInTrashOrSpam &=
+                                        MessageSelectionCapabilities.isTrashOrSpam(folder.type);
+                            }
+                            if (gmailApi && trash != null && gmailMessageWritable &&
+                                    !MessageSelectionCapabilities.isTrashOrSpam(folder.type))
+                                trashable = true;
+                            else if ((account == null || !account.isNativeRestApi() || trash != null) &&
+                                    !folder.read_only &&
                                     !EntityFolder.DRAFTS.equals(folder.type) &&
                                     !EntityFolder.OUTBOX.equals(folder.type) &&
                                     (!EntityFolder.SENT.equals(folder.type) || move_thread_sent) &&
@@ -8448,11 +8997,17 @@ public class FragmentMessages extends FragmentBase
                         junkOnly = false;
 
                     boolean pop = (account != null && account.protocol == EntityAccount.TYPE_POP);
+                    boolean nativePermanent = (account != null &&
+                            (account.isGraphApi() || account.isZohoApi()) &&
+                            hasNativePermanentDelete && allNativeDeletesInTrashOrSpam);
 
                     ActionData data = new ActionData();
-                    data.delete = (trash == null || junkOnly || pop);
-                    data.forever = (data.delete && (!pop || !account.leave_deleted));
-                    data.trashable = trashable || junkOnly;
+                    data.delete = (gmailTrashDelete || nativePermanent ||
+                            ((account == null || !account.isNativeRestApi()) &&
+                                    (trash == null || junkOnly || pop)));
+                    data.forever = (gmailTrashDelete || nativePermanent ||
+                            (data.delete && (!pop || !account.leave_deleted)));
+                    data.trashable = trashable || junkOnly || gmailTrashDelete || nativePermanent;
                     data.snoozable = snoozable;
                     data.archivable = (archivable && archive != null);
                     return data;
@@ -8511,7 +9066,10 @@ public class FragmentMessages extends FragmentBase
                             .setOnLongClickListener(new View.OnLongClickListener() {
                                 @Override
                                 public boolean onLongClick(View v) {
-                                    onActionDelete();
+                                    ActionData current = (ActionData) bottom_navigation.getTag();
+                                    if (current == null || !current.delete)
+                                        return false;
+                                    onActionDelete(current.forever);
                                     return true;
                                 }
                             });
@@ -8621,15 +9179,22 @@ public class FragmentMessages extends FragmentBase
     }
 
     private void handleExpand(long id) {
+        TupleMessageEx selected = (adapter == null ? null : adapter.getItemForKey(id));
+        String graphTrace = (selected != null && selected.graph_id != null
+                ? ApiMutationLog.newTraceId() : null);
+        graphOpenTraceId = graphTrace;
         SimpleTask<Void> taskExpand = new SimpleTask<Void>() {
             @Override
             protected Void onExecute(Context context, Bundle args) {
                 long id = args.getLong("id");
                 boolean seen = args.getBoolean("seen");
+                boolean loadBody = args.getBoolean("load_body", true);
+                String graphTrace = ApiMutationLog.safeTraceId(args.getString("graph_open_trace"));
 
                 Long reload = null;
 
                 DB db = DB.getInstance(context);
+                GmailMutationWakeups gmailWakeups = new GmailMutationWakeups();
                 try {
                     db.beginTransaction();
 
@@ -8645,6 +9210,10 @@ public class FragmentMessages extends FragmentBase
                     if (account == null)
                         return null;
 
+                    if (account.isGraphApi() && graphTrace != null && loadBody)
+                        ApiMutationLog.graphOpen(graphTrace, folder.type, !message.seen,
+                                account.auto_seen, !message.content, folder.auto_classify_source);
+
                     if (!"connected".equals(account.state) && !account.isTransient(context))
                         reload = account.id;
 
@@ -8659,18 +9228,40 @@ public class FragmentMessages extends FragmentBase
                                 db.message().setMessageUiIgnored(message.id, true);
                         }
 
-                        if (account.auto_seen)
-                            if (account.protocol != EntityAccount.TYPE_IMAP || message.uid != null)
-                                EntityOperation.queue(context, message, EntityOperation.SEEN, true);
-                            else if (false)
+                        if (account.auto_seen) {
+                            if (account.isGmailApi()) {
+                                if (GmailOpenRead.shouldQueue(true, account.auto_seen, seen,
+                                        message.gmail_id, !message.seen,
+                                        db.operation().getOperationsForMessage(message.id)) &&
+                                        EntityOperation.queueGmailApiMutationDeferred(context, message,
+                                                EntityOperation.SEEN, true))
+                                    gmailWakeups.queued(account.id, EntityOperation.SEEN);
+                            } else if (account.protocol != EntityAccount.TYPE_IMAP || message.uid != null ||
+                                    message.zoho_id != null || message.graph_id != null) {
+                                if (account.isGraphApi() && graphTrace != null) {
+                                    EntityOperation.queue(context, message, EntityOperation.SEEN,
+                                            true, true, graphTrace);
+                                    EntityOperation queued = db.operation().getOperation(
+                                            message.id, EntityOperation.SEEN);
+                                    ApiMutationLog.event("graph", "queue_insert", "seen",
+                                            (ApiMutationLog.operationHasTrace(queued, graphTrace)
+                                                    ? "queued" : "not_queued"), graphTrace);
+                                } else
+                                    EntityOperation.queue(context, message, EntityOperation.SEEN, true);
+                            } else if (false)
                                 for (EntityMessage similar : db.message().getMessagesBySimilarity(message.account, message.id, message.msgid, message.hash)) {
                                     db.message().setMessageSeen(similar.id, true);
                                     db.message().setMessageUiSeen(similar.id, true);
                                 }
+                        }
                     }
 
-                    if (account.protocol != EntityAccount.TYPE_IMAP || message.uid != null) {
-                        if (!message.content)
+                    if (!message.content) {
+                        if (account.isNativeRestApi()) {
+                            if (loadBody)
+                                NativeApiContentOperations.queueBodyOnOpen(
+                                        context, db, account, folder, message, graphTrace);
+                        } else if (account.protocol != EntityAccount.TYPE_IMAP || message.uid != null)
                             EntityOperation.queue(context, message, EntityOperation.BODY);
                     }
 
@@ -8682,9 +9273,12 @@ public class FragmentMessages extends FragmentBase
                     db.endTransaction();
                 }
 
-                if (reload == null)
-                    ServiceSynchronize.eval(context, "expand");
-                else
+                boolean queuedGmailRead = !gmailWakeups.isEmpty();
+                dispatchGmailMutationWakeups(context, gmailWakeups);
+                if (reload == null) {
+                    if (!queuedGmailRead)
+                        ServiceSynchronize.eval(context, "expand");
+                } else
                     ServiceSynchronize.reload(context, reload, false, "expand");
 
                 return null;
@@ -8699,6 +9293,9 @@ public class FragmentMessages extends FragmentBase
         Bundle args = new Bundle();
         args.putLong("id", id);
         args.putBoolean("seen", seen_delay == 0);
+        args.putBoolean("load_body", true);
+        if (graphTrace != null)
+            args.putString("graph_open_trace", graphTrace);
         taskExpand.execute(this, args, "messages:expand");
 
         if (seen_delay == 0)
@@ -8707,6 +9304,9 @@ public class FragmentMessages extends FragmentBase
         Bundle dargs = new Bundle();
         dargs.putLong("id", id);
         dargs.putBoolean("seen", true);
+        dargs.putBoolean("load_body", false);
+        if (graphTrace != null)
+            dargs.putString("graph_open_trace", graphTrace);
 
         view.postDelayed(new RunnableEx("seen_delay") {
             @Override
@@ -8729,65 +9329,19 @@ public class FragmentMessages extends FragmentBase
                 }
             }
         }, seen_delay);
-
-        new SimpleTask<Void>() {
-            @Override
-            protected Void onExecute(Context context, Bundle args) {
-                long id = args.getLong("id");
-
-                Long reload = null;
-
-                DB db = DB.getInstance(context);
-                try {
-                    db.beginTransaction();
-
-                    EntityMessage message = db.message().getMessageEx(id);
-                    if (message == null)
-                        return null;
-
-                    EntityFolder folder = db.folder().getFolder(message.folder);
-                    if (folder == null || folder.account == null)
-                        return null;
-
-                    EntityAccount account = db.account().getAccount(folder.account);
-                    if (account == null)
-                        return null;
-
-                    if (!"connected".equals(account.state) && !account.isTransient(context))
-                        reload = account.id;
-
-                    if (account.protocol != EntityAccount.TYPE_IMAP || message.uid != null) {
-                        if (!message.content)
-                            EntityOperation.queue(context, message, EntityOperation.BODY);
-                    }
-
-                    db.setTransactionSuccessful();
-                } finally {
-                    db.endTransaction();
-                }
-
-                if (reload == null)
-                    ServiceSynchronize.eval(context, "expand");
-                else
-                    ServiceSynchronize.reload(context, reload, false, "expand");
-
-                return null;
-            }
-
-            @Override
-            protected void onException(Bundle args, Throwable ex) {
-                Log.unexpectedError(getParentFragmentManager(), ex);
-            }
-        }.setLog(false).execute(this, dargs, "messages:expand");
     }
 
     private void handleAutoClose() {
-        if (autoclose)
+        if (autoclose) {
+            if (graphOpenTraceId != null)
+                ApiMutationLog.event("graph", "navigation", "navigate", "auto_closed", graphOpenTraceId);
             finish();
-        else if (onclose != null) {
-            if (closeId == null)
+        } else if (onclose != null) {
+            if (closeId == null) {
+                if (graphOpenTraceId != null)
+                    ApiMutationLog.event("graph", "navigation", "navigate", "auto_closed", graphOpenTraceId);
                 finish();
-            else {
+            } else {
                 Log.i("Navigating to id=" + closeId);
 
                 Context context = getContext();
@@ -8848,6 +9402,9 @@ public class FragmentMessages extends FragmentBase
         if (navigating)
             return;
         navigating = true;
+
+        if (graphOpenTraceId != null)
+            ApiMutationLog.event("graph", "navigation", "navigate", "navigated", graphOpenTraceId);
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
         final boolean reversed = prefs.getBoolean("reversed", false);
@@ -8936,7 +9493,7 @@ public class FragmentMessages extends FragmentBase
             return;
 
         if (undo) {
-            moveUndo(result);
+            moveUndoSafe(result);
             return;
         }
 
@@ -8944,7 +9501,7 @@ public class FragmentMessages extends FragmentBase
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
         if (prefs.getBoolean(key, false)) {
-            moveUndo(result);
+            moveUndoSafe(result);
             return;
         }
 
@@ -8958,39 +9515,158 @@ public class FragmentMessages extends FragmentBase
         ask.show(getParentFragmentManager(), "messages:move");
     }
 
+    private void moveUndoSafe(ArrayList<MessageTarget> result) {
+        ArrayList<MessageTarget> gmailTargets = new ArrayList<>();
+        ArrayList<MessageTarget> legacyTargets = new ArrayList<>();
+        for (MessageTarget target : result)
+            if (target.sourceAccount.gmailApi)
+                gmailTargets.add(target);
+            else
+                legacyTargets.add(target);
+
+        if (!gmailTargets.isEmpty())
+            moveAskConfirmed(gmailTargets);
+        if (!legacyTargets.isEmpty())
+            moveUndo(legacyTargets);
+    }
+
     private void moveAskConfirmed(ArrayList<MessageTarget> result) {
         if (selectionTracker != null)
             selectionTracker.clearSelection();
 
         Bundle args = new Bundle();
         args.putParcelableArrayList("result", result);
+        args.putLong("source_view", folder);
 
         // Move messages
-        new SimpleTask<Void>() {
+        new SimpleTask<MoveCallbackResult>() {
             @Override
-            protected Void onExecute(Context context, Bundle args) {
+            protected MoveCallbackResult onExecute(Context context, Bundle args) {
                 DB db = DB.getInstance(context);
+                MoveCallbackResult callbackResult = new MoveCallbackResult();
+                Set<Long> refreshAccounts = new HashSet<>();
+                GmailMutationWakeups gmailWakeups = new GmailMutationWakeups();
+                boolean queuedLegacy = false;
                 try {
                     List<MessageTarget> result = args.getParcelableArrayList("result");
+                    long sourceViewId = args.getLong("source_view", -1L);
 
                     db.beginTransaction();
 
                     for (MessageTarget target : result) {
+                        EntityAccount expectedAccount = db.account().getAccount(target.sourceAccount.id);
                         EntityMessage message = db.message().getMessage(target.id);
-                        if (message == null)
+                        boolean gmailAttempt = ((expectedAccount != null && expectedAccount.isGmailApi()) ||
+                                target.sourceAccount.gmailApi);
+                        String attemptToken = (gmailAttempt ? GmailMutationLog.newAttemptToken() : null);
+                        String targetType = GmailMutationLog.targetType(
+                                target.targetFolder == null ? null : target.targetFolder.type);
+                        if (message == null) {
+                            if (gmailAttempt) {
+                                callbackResult.gmailSkipped++;
+                                if (expectedAccount != null && expectedAccount.isGmailApi())
+                                    refreshAccounts.add(expectedAccount.id);
+                                GmailMutationLog.callback(EntityOperation.MOVE, targetType,
+                                        "message_missing", attemptToken);
+                            }
                             continue;
+                        }
 
-                        Log.i("Move id=" + target.id + " target=" + target.targetFolder.name + " copy=" + target.copy);
-                        if (target.copy)
+                        EntityAccount account = db.account().getAccount(message.account);
+                        if ((account != null && account.isGmailApi()) || target.sourceAccount.gmailApi) {
+                            if (account == null || !account.isGmailApi()) {
+                                callbackResult.gmailSkipped++;
+                                GmailMutationLog.callback(EntityOperation.MOVE, targetType,
+                                        account == null ? "account_missing" : "account_not_gmail",
+                                        attemptToken);
+                                continue;
+                            }
+                            EntityFolder source = db.folder().getFolder(message.folder);
+                            EntityFolder sourceView = (sourceViewId < 0 ? null :
+                                    db.folder().getFolder(sourceViewId));
+                            EntityFolder destination = (target.targetFolder == null ? null :
+                                    db.folder().getFolder(target.targetFolder.id));
+                            String rejectReason = null;
+                            if (source == null)
+                                rejectReason = "source_folder_missing";
+                            else if (destination == null)
+                                rejectReason = "destination_folder_missing";
+                            else if (sourceViewId >= 0 && sourceView == null)
+                                rejectReason = "source_view_missing";
+                            else if (sourceView != null &&
+                                    !Objects.equals(sourceView.account, account.id) &&
+                                    !(sourceView.account == null && Boolean.TRUE.equals(sourceView.unified)))
+                                rejectReason = "source_view_mismatch";
+                            else if (!Objects.equals(target.sourceAccount.id, message.account))
+                                rejectReason = "source_account_mismatch";
+                            else if (target.targetAccount == null ||
+                                    !Objects.equals(target.targetAccount.id, account.id))
+                                rejectReason = "target_account_mismatch";
+                            GmailMailMutator.MoveCallbackValidation validation = (sourceViewId >= 0 &&
+                                    sourceView == null
+                                    ? GmailMailMutator.MoveCallbackValidation.INVALID_TARGET
+                                    : GmailMailMutator.validateMoveCallback(account, source, message,
+                                            destination, sourceView));
+                            if (rejectReason == null &&
+                                    validation != GmailMailMutator.MoveCallbackValidation.READY)
+                                rejectReason = GmailMutationLog.validationReason(validation);
+                            if (rejectReason == null && target.copy)
+                                rejectReason = "copy_not_supported";
+                            if (rejectReason != null) {
+                                callbackResult.gmailSkipped++;
+                                refreshAccounts.add(account.id);
+                                db.message().setMessageUiHide(message.id, false);
+                                db.message().setMessageUiBusy(message.id, null);
+                                GmailMutationLog.callback(EntityOperation.MOVE, targetType,
+                                        rejectReason, attemptToken);
+                                continue;
+                            }
+
+                            GmailMutationLog.callback(EntityOperation.MOVE, targetType,
+                                    "accepted", attemptToken);
+                            String sourceLabel = GmailMailMutator.resolveMoveSourceViewLabel(
+                                    account, source, sourceView);
+                            GmailMutationLog.QueueResult queueResult =
+                                    EntityOperation.queueGmailApiMutationDeferredTraced(context, message,
+                                    EntityOperation.MOVE, attemptToken, destination.id, null, null,
+                                    !target.block, null, sourceLabel);
+                            if (!GmailPendingActionPolicy.shouldMarkPending(queueResult)) {
+                                callbackResult.gmailSkipped++;
+                                refreshAccounts.add(account.id);
+                                db.message().setMessageUiHide(message.id, false);
+                                db.message().setMessageUiBusy(message.id, null);
+                                GmailMutationLog.callback(EntityOperation.MOVE, targetType,
+                                        GmailMutationLog.queueReason(queueResult), attemptToken);
+                                continue;
+                            }
+                            GmailMutationLog.callback(EntityOperation.MOVE, targetType,
+                                    "queued", attemptToken);
+                            db.message().setMessageUiBusy(message.id,
+                                    GmailPendingActionPolicy.PENDING_UNTIL_RESOLVED);
+                            callbackResult.gmailQueued.add(message.id);
+                            gmailWakeups.queued(account.id, EntityOperation.MOVE, attemptToken);
+                            if (target.block && EntityFolder.JUNK.equals(destination.type))
+                                EntityContact.update(context,
+                                        message.account, message.identity, message.from,
+                                        EntityContact.TYPE_JUNK, message.received);
+                        } else if (target.copy) {
                             EntityOperation.queue(context, message, EntityOperation.COPY, target.targetFolder.id);
-                        else
-                            EntityOperation.queue(context, message, EntityOperation.MOVE, target.targetFolder.id, null, null, !target.block);
+                            queuedLegacy = true;
+                        } else {
+                            String provider = ApiMutationLog.provider(account);
+                            if (provider != null && !"gmail".equals(provider))
+                                ApiMutationLog.callback(provider, EntityOperation.MOVE,
+                                        ApiMutationLog.targetType(target.targetFolder.type), "accepted");
+                            EntityOperation.queue(context, message, EntityOperation.MOVE,
+                                    target.targetFolder.id, null, null, !target.block, null, null);
+                            queuedLegacy = true;
 
-                        if (target.block &&
-                                EntityFolder.JUNK.equals(target.targetFolder.type))
-                            EntityContact.update(context,
-                                    message.account, message.identity, message.from,
-                                    EntityContact.TYPE_JUNK, message.received);
+                            if (target.block &&
+                                    EntityFolder.JUNK.equals(target.targetFolder.type))
+                                EntityContact.update(context,
+                                        message.account, message.identity, message.from,
+                                        EntityContact.TYPE_JUNK, message.received);
+                        }
                     }
 
                     db.setTransactionSuccessful();
@@ -8998,18 +9674,41 @@ public class FragmentMessages extends FragmentBase
                     db.endTransaction();
                 }
 
-                ServiceSynchronize.eval(context, "move");
+                dispatchGmailMutationWakeups(context, gmailWakeups);
 
-                return null;
+                for (Long refreshAccount : refreshAccounts)
+                    ServiceSynchronize.reload(context, refreshAccount, false,
+                            "Gmail move callback stale");
+                if (queuedLegacy)
+                    ServiceSynchronize.eval(context, "move");
+
+                callbackResult.queuedOther = queuedLegacy;
+                return callbackResult;
             }
 
             @Override
-            protected void onExecuted(Bundle args, Void data) {
+            protected void onExecuted(Bundle args, MoveCallbackResult callbackResult) {
+                if (callbackResult != null && callbackResult.gmailSkipped > 0 && view != null)
+                    Helper.setSnackbarOptions(Snackbar.make(view,
+                            R.string.title_gmail_action_refresh, Snackbar.LENGTH_LONG)).show();
+
+                if (GmailPendingActionPolicy.shouldReturnToList(
+                        viewType == AdapterMessage.ViewType.THREAD,
+                        callbackResult != null && !callbackResult.gmailQueued.isEmpty(),
+                        callbackResult != null && callbackResult.queuedOther)) {
+                    finish();
+                    return;
+                }
+
                 if (viewType == AdapterMessage.ViewType.THREAD) {
                     PagedList<TupleMessageEx> messages = adapter.getCurrentList();
                     if (messages != null && result.size() > 0) {
-                        Log.i("Eval confirmed messages=" + messages.size() + " targets=" + result.size());
-                        handleThreadActions(messages, result, null);
+                        ArrayList<MessageTarget> legacyTargets = new ArrayList<>();
+                        for (MessageTarget target : result)
+                            if (!target.sourceAccount.gmailApi)
+                                legacyTargets.add(target);
+                        if (!legacyTargets.isEmpty())
+                            handleThreadActions(messages, legacyTargets, null);
                     }
                 }
             }
@@ -9833,8 +10532,11 @@ public class FragmentMessages extends FragmentBase
                         onPgp(data, false, false);
                     break;
                 case REQUEST_MESSAGE_DELETE:
-                    if (resultCode == RESULT_OK && data != null)
-                        onDelete(data.getBundleExtra("args").getLong("id"));
+                    if (resultCode == RESULT_OK && data != null) {
+                        Bundle deleteArgs = data.getBundleExtra("args");
+                        onDelete(deleteArgs.getLong("id"), deleteArgs.getBoolean("permanent"),
+                                deleteArgs.getString("delete_trace"));
+                    }
                     break;
                 case REQUEST_MESSAGES_DELETE:
                     if (resultCode == RESULT_OK && data != null)
@@ -11285,78 +11987,325 @@ public class FragmentMessages extends FragmentBase
         }.serial().execute(this, args, "decrypt:s/mime");
     }
 
+    private static long getGmailAccountHint(Bundle args, long messageId) {
+        if (args == null)
+            return -1L;
+        long accountHint = args.getLong("account_hint", -1L);
+        if (accountHint > 0 && args.getBoolean("gmail_api_hint"))
+            return accountHint;
+        long[] messageIds = args.getLongArray("gmail_message_ids");
+        long[] accountIds = args.getLongArray("gmail_account_ids");
+        if (messageIds == null || accountIds == null)
+            return -1L;
+        int count = Math.min(messageIds.length, accountIds.length);
+        for (int i = 0; i < count; i++)
+            if (messageIds[i] == messageId)
+                return accountIds[i];
+        return -1L;
+    }
+
+    private static void dispatchGmailMutationWakeups(Context context, GmailMutationWakeups wakeups) {
+        wakeups.dispatchAfterCommit(new GmailMutationWakeups.Callback() {
+            @Override
+            public void onDurable(long accountId, String operation) {
+                GmailMutationLog.event("durable_queue", operation, "stored");
+            }
+
+            @Override
+            public void onDurable(long accountId, String operation, String attemptToken) {
+                GmailMutationLog.event("durable_queue", operation, "stored", attemptToken);
+            }
+
+            @Override
+            public void onWake(long accountId) {
+                ServiceSynchronize.eval(context, accountId, "Gmail REST write queued");
+                GmailMutationLog.event("refresh_summary", "refresh", "scheduled");
+            }
+        });
+    }
+
+    private static boolean queueZohoDelete(Context context, DB db, EntityAccount account,
+                                           EntityFolder folder, EntityMessage message,
+                                           boolean permanent, String requestedTrace) {
+        if (!permanent) {
+            String name = ZohoMailMutator.getIndividualDeleteOperation(account, folder, message, false);
+            EntityOperation.queue(context, message, name);
+            return true;
+        }
+
+        String trace = ApiMutationLog.safeTraceId(requestedTrace);
+        if (trace == null)
+            trace = ApiMutationLog.newTraceId();
+        if (account == null || folder == null || message == null) {
+            ApiMutationLog.write(ApiMutationLog.formatZohoDeleteState("action_gate", "not_writable",
+                    trace, false, false, false,
+                    message != null && ZohoApi.isValidRemoteId(message.zoho_id), false));
+            ApiMutationLog.callback("zoho", EntityOperation.ZOHO_PERMANENT_DELETE,
+                    "other", "rejected", trace);
+            ApiMutationLog.event("zoho", "queue_insert", EntityOperation.ZOHO_PERMANENT_DELETE,
+                    "not_queued", trace);
+            return false;
+        }
+        String name = ZohoMailMutator.getIndividualDeleteOperation(account, folder, message, true);
+        boolean writable = ZohoMailMutator.isWritableMessage(account, folder, message);
+        ApiMutationLog.write(ApiMutationLog.formatZohoDeleteState("action_gate",
+                (writable ? "eligible" : "not_writable"), trace,
+                folder.read_only, folder.selectable,
+                ZohoApi.isValidRemoteId(folder.zoho_folder_id),
+                ZohoApi.isValidRemoteId(message.zoho_id),
+                ZohoMailMutator.hasFolderId(message.zoho_folder_ids, folder.zoho_folder_id)));
+        if (!writable) {
+            ApiMutationLog.callback("zoho", name, ApiMutationLog.targetType(folder.type), "rejected", trace);
+            ApiMutationLog.event("zoho", "queue_insert", name, "not_queued", trace);
+            return false;
+        }
+        ApiMutationLog.callback("zoho", name, ApiMutationLog.targetType(folder.type), "accepted", trace);
+
+        // Keep the correlation token in durable operation args for worker/API diagnostics.
+        EntityOperation.queue(context, message, name, trace);
+        EntityOperation queued = db.operation().getOperation(message.id, name);
+        boolean persisted = ApiMutationLog.operationHasTrace(queued, trace);
+        ApiMutationLog.event("zoho", "queue_insert", name, (persisted ? "queued" : "not_queued"), trace);
+        return persisted;
+    }
+
+    private static void reportGmailDeleteFailure(DB db, EntityMessage message, long accountId,
+                                                DeleteCallbackResult result, List<Long> refreshAccounts,
+                                                String operation, String outcome, String attemptToken) {
+        result.gmailSkipped++;
+        if (message != null) {
+            db.message().setMessageUiHide(message.id, false);
+            db.message().setMessageUiBusy(message.id, null);
+            db.message().setMessageUiDeleted(message.id, false);
+        }
+        if (accountId > 0 && !refreshAccounts.contains(accountId))
+            refreshAccounts.add(accountId);
+        GmailMutationLog.callback(operation, GmailMutationLog.deleteTargetType(operation),
+                outcome, attemptToken);
+    }
+
     private void onDelete(long id) {
+        onDelete(id, false);
+    }
+
+    private void onDelete(long id, boolean permanent) {
+        onDelete(id, permanent, null);
+    }
+
+    private void onDelete(long id, boolean permanent, String deleteTrace) {
         Bundle args = new Bundle();
         args.putLong("id", id);
+        args.putBoolean("permanent", permanent);
+        String safeTrace = ApiMutationLog.safeTraceId(deleteTrace);
+        if (safeTrace != null)
+            args.putString("delete_trace", safeTrace);
+        TupleMessageEx selected = (adapter == null ? null : adapter.getItemForKey(id));
+        if (selected != null) {
+            args.putLong("account_hint", selected.account);
+            args.putBoolean("gmail_api_hint", selected.gmail_id != null);
+        } else if (account > 0)
+            args.putLong("account_hint", account);
+        if (args.getBoolean("gmail_api_hint"))
+            args.putString("gmail_attempt", GmailMutationLog.newAttemptToken());
 
-        new SimpleTask<Void>() {
+        new SimpleTask<DeleteCallbackResult>() {
             @Override
-            protected Void onExecute(Context context, Bundle args) {
+            protected DeleteCallbackResult onExecute(Context context, Bundle args) {
                 long id = args.getLong("id");
-
+                DeleteCallbackResult result = new DeleteCallbackResult();
+                List<Long> refreshAccounts = new ArrayList<>();
                 DB db = DB.getInstance(context);
+                long rawAccountHint = args.getLong("account_hint", -1L);
+                EntityAccount hintedAccount = (rawAccountHint > 0
+                        ? db.account().getAccount(rawAccountHint) : null);
+                boolean gmailHint = args.getBoolean("gmail_api_hint") ||
+                        (hintedAccount != null && hintedAccount.isGmailApi());
+                String attemptToken = (gmailHint
+                        ? GmailMutationLog.safeAttemptToken(args.getString("gmail_attempt")) : null);
+                if (gmailHint && attemptToken == null)
+                    attemptToken = GmailMutationLog.newAttemptToken();
 
                 // Cancel send operation
                 EntityOperation operation = db.operation().getOperation(id, EntityOperation.SEND);
-                if (operation != null)
-                    if ("executing".equals(operation.state))
-                        return null;
-                    else
-                        db.operation().deleteOperation(operation.id);
+                if (operation != null) {
+                    if ("executing".equals(operation.state)) {
+                        if (gmailHint)
+                            reportGmailDeleteFailure(db, db.message().getMessage(id), rawAccountHint,
+                                    result, refreshAccounts,
+                                    GmailMailMutator.getDeleteOperation(hintedAccount, permanent),
+                                    "source_missing", attemptToken);
+                        else
+                            result.legacyRemoved.add(id);
+                        for (long accountId : refreshAccounts)
+                            ServiceSynchronize.reload(context, accountId, false,
+                                    "Gmail delete source stale");
+                        return result;
+                    }
+                    db.operation().deleteOperation(operation.id);
+                }
 
+                boolean wakeLegacy = false;
+                GmailMutationWakeups gmailWakeups = new GmailMutationWakeups();
                 try {
                     db.beginTransaction();
 
                     EntityMessage message = db.message().getMessage(id);
-                    if (message == null)
-                        return null;
-
-                    EntityAccount account = db.account().getAccount(message.account);
-                    if (account == null)
-                        return null;
-
-                    EntityFolder folder = db.folder().getFolder(message.folder);
-                    if (folder == null)
-                        return null;
-
-                    if (EntityFolder.OUTBOX.equals(folder.type)) {
-                        db.message().deleteMessage(id);
-
-                        db.folder().setFolderError(message.folder, null);
-                        if (message.identity != null)
-                            db.identity().setIdentityError(message.identity, null);
-                    } else if (message.uid == null && account.protocol == EntityAccount.TYPE_IMAP) {
-                        db.message().deleteMessage(id);
-                        db.folder().setFolderError(message.folder, null);
-                    } else
-                        EntityOperation.queue(context, message, EntityOperation.DELETE);
+                    if (message == null) {
+                        if (gmailHint)
+                            reportGmailDeleteFailure(db, null, rawAccountHint, result, refreshAccounts,
+                                    GmailMailMutator.getDeleteOperation(hintedAccount, permanent),
+                                    "message_missing", attemptToken);
+                        else
+                            result.legacyRemoved.add(id);
+                    } else {
+                        EntityAccount owner = db.account().getAccount(message.account);
+                        EntityFolder folder = db.folder().getFolder(message.folder);
+                        if (owner == null || folder == null) {
+                            String provider = ApiMutationLog.provider(owner);
+                            if (provider != null && !"gmail".equals(provider))
+                                ApiMutationLog.callback(provider,
+                                        GmailMailMutator.getDeleteOperation(owner, permanent), "trash",
+                                        (folder == null ? "source_folder_missing" : "account_missing"));
+                            if (gmailHint || message.gmail_id != null ||
+                                    (owner != null && owner.isGmailApi())) {
+                                if (attemptToken == null)
+                                    attemptToken = GmailMutationLog.newAttemptToken();
+                                reportGmailDeleteFailure(db, message,
+                                        (owner == null ? rawAccountHint : owner.id), result,
+                                        refreshAccounts,
+                                        GmailMailMutator.getDeleteOperation(owner, permanent),
+                                        owner == null ? "account_missing" : "source_folder_missing",
+                                        attemptToken);
+                            } else
+                                result.legacyRemoved.add(id);
+                        } else if (gmailHint && !owner.isGmailApi()) {
+                            reportGmailDeleteFailure(db, message, rawAccountHint, result,
+                                    refreshAccounts,
+                                    GmailMailMutator.getDeleteOperation(owner, permanent),
+                                    "account_not_gmail", attemptToken);
+                        } else if (EntityFolder.OUTBOX.equals(folder.type) ||
+                                EntityOperation.isGmailApiLocalDraft(owner, folder, message) ||
+                                EntityOperation.isZohoApiLocalDraft(owner, folder, message)) {
+                            db.message().deleteMessage(id);
+                            db.folder().setFolderError(message.folder, null);
+                            if (message.identity != null)
+                                db.identity().setIdentityError(message.identity, null);
+                            result.legacyRemoved.add(id);
+                            wakeLegacy = true;
+                        } else if (owner.isGmailApi()) {
+                            if (attemptToken == null)
+                                attemptToken = GmailMutationLog.newAttemptToken();
+                            String name = GmailMailMutator.getDeleteOperation(owner, permanent);
+                            if (!GmailMailMutator.canDeleteFromGmail(owner, folder, message))
+                                reportGmailDeleteFailure(db, message, owner.id, result, refreshAccounts,
+                                        name, "invalid_target", attemptToken);
+                            else {
+                                GmailMutationLog.callback(name, GmailMutationLog.deleteTargetType(name),
+                                        "accepted", attemptToken);
+                                GmailMutationLog.QueueResult queueResult =
+                                        EntityOperation.queueGmailApiMutationDeferredTraced(
+                                                context, message, name, attemptToken);
+                                if (GmailPendingActionPolicy.shouldMarkPending(queueResult)) {
+                                    GmailMutationLog.callback(name, GmailMutationLog.deleteTargetType(name),
+                                            "queued", attemptToken);
+                                    db.message().setMessageUiBusy(message.id,
+                                            GmailPendingActionPolicy.PENDING_UNTIL_RESOLVED);
+                                    result.gmailQueued.add(message.id);
+                                    gmailWakeups.queued(owner.id, name, attemptToken);
+                                } else
+                                    reportGmailDeleteFailure(db, message, owner.id, result, refreshAccounts,
+                                            name, GmailMutationLog.queueReason(queueResult), attemptToken);
+                            }
+                        } else if (MessageSelectionCapabilities.shouldDeleteLocallyWithoutUid(
+                                false, owner.isGraphApi(), owner.isZohoApi(),
+                                owner.protocol, message.uid != null)) {
+                            db.message().deleteMessage(id);
+                            db.folder().setFolderError(message.folder, null);
+                            result.legacyRemoved.add(id);
+                            wakeLegacy = true;
+                        } else {
+                            String name = GmailMailMutator.getDeleteOperation(owner, permanent);
+                            if (owner.isGraphApi() && permanent)
+                                name = EntityOperation.GRAPH_DELETE_PERMANENT;
+                            boolean queued = true;
+                            if (owner.isZohoApi())
+                                queued = queueZohoDelete(context, db, owner, folder, message, permanent,
+                                        args.getString("delete_trace"));
+                            else {
+                                String provider = ApiMutationLog.provider(owner);
+                                if (provider != null && !"gmail".equals(provider))
+                                    ApiMutationLog.callback(provider, name, "trash", "accepted");
+                                EntityOperation.queue(context, message, name);
+                            }
+                            if (queued) {
+                                result.legacyRemoved.add(id);
+                                wakeLegacy = true;
+                            } else
+                                result.zohoSkipped++;
+                        }
+                    }
 
                     db.setTransactionSuccessful();
                 } finally {
                     db.endTransaction();
                 }
 
-                ServiceSynchronize.eval(context, "delete");
+                dispatchGmailMutationWakeups(context, gmailWakeups);
+                for (long accountId : refreshAccounts)
+                    ServiceSynchronize.reload(context, accountId, false,
+                            "Gmail delete source stale");
+                if (wakeLegacy)
+                    ServiceSynchronize.eval(context, "delete");
 
                 NotificationManager nm = Helper.getSystemService(context, NotificationManager.class);
                 nm.cancel("send:" + id, NotificationHelper.NOTIFICATION_TAGGED);
 
-                return null;
+                return result;
             }
 
             @Override
-            protected void onExecuted(Bundle args, Void data) {
-                if (viewType == AdapterMessage.ViewType.THREAD) {
+            protected void onExecuted(Bundle args, DeleteCallbackResult data) {
+                if (data == null)
+                    return;
+                if (data.gmailSkipped > 0 && view != null)
+                    Helper.setSnackbarOptions(Snackbar.make(view,
+                            R.string.title_gmail_action_refresh, Snackbar.LENGTH_LONG)).show();
+                if (GmailPendingActionPolicy.shouldReturnToList(
+                        viewType == AdapterMessage.ViewType.THREAD,
+                        !data.gmailQueued.isEmpty(), !data.legacyRemoved.isEmpty())) {
+                    finish();
+                    return;
+                }
+                if (viewType == AdapterMessage.ViewType.THREAD && !data.legacyRemoved.isEmpty()) {
                     PagedList<TupleMessageEx> messages = adapter.getCurrentList();
                     if (messages != null) {
-                        Log.i("Eval delete messages=" + messages.size() + " id=" + id);
-                        handleThreadActions(adapter.getCurrentList(), null, Arrays.asList(id));
+                        Log.i("Eval delete messages=" + messages.size() +
+                                " ids=" + data.legacyRemoved.size());
+                        handleThreadActions(adapter.getCurrentList(), null, data.legacyRemoved);
                     }
                 }
+                if (data.zohoSkipped > 0 && view != null)
+                    Helper.setSnackbarOptions(Snackbar.make(view,
+                            R.string.title_zoho_delete_refresh, Snackbar.LENGTH_LONG)).show();
             }
 
             @Override
             protected void onException(Bundle args, Throwable ex) {
+                long accountHint = getGmailAccountHint(args, id);
+                if (args.getBoolean("gmail_api_hint") || accountHint > 0) {
+                    GmailMutationLog.callback(
+                            GmailMailMutator.getDeleteOperation(null, args.getBoolean("permanent")),
+                            GmailMutationLog.deleteTargetType(
+                                    GmailMailMutator.getDeleteOperation(null, args.getBoolean("permanent"))),
+                            "callback_exception",
+                            GmailMutationLog.safeAttemptToken(args.getString("gmail_attempt")));
+                    if (accountHint > 0 && getContext() != null)
+                        ServiceSynchronize.reload(getContext(), accountHint, false,
+                                "Gmail delete callback failed");
+                    if (view != null)
+                        Helper.setSnackbarOptions(Snackbar.make(view,
+                                R.string.title_gmail_action_refresh, Snackbar.LENGTH_LONG)).show();
+                }
                 Log.unexpectedError(getParentFragmentManager(), ex);
             }
         }.execute(this, args, "message:delete");
@@ -11366,47 +12315,166 @@ public class FragmentMessages extends FragmentBase
         if (selectionTracker != null)
             selectionTracker.clearSelection();
 
-        new SimpleTask<Void>() {
+        new SimpleTask<DeleteCallbackResult>() {
             @Override
-            protected Void onExecute(Context context, Bundle args) {
+            protected DeleteCallbackResult onExecute(Context context, Bundle args) {
                 long[] ids = args.getLongArray("ids");
-
+                DeleteCallbackResult result = new DeleteCallbackResult();
+                List<Long> refreshAccounts = new ArrayList<>();
+                GmailMutationWakeups gmailWakeups = new GmailMutationWakeups();
                 DB db = DB.getInstance(context);
+                boolean wakeLegacy = false;
                 try {
                     db.beginTransaction();
 
-                    for (long id : ids) {
-                        EntityMessage message = db.message().getMessage(id);
-                        if (message == null)
-                            continue;
+                    if (ids != null)
+                        for (long id : ids) {
+                            EntityMessage message = db.message().getMessage(id);
+                            long accountHint = getGmailAccountHint(args, id);
+                            String attemptToken = (accountHint > 0 ||
+                                    (message != null && message.gmail_id != null)
+                                    ? GmailMutationLog.newAttemptToken() : null);
+                            if (message == null) {
+                                if (accountHint > 0)
+                                    reportGmailDeleteFailure(db, null, accountHint, result, refreshAccounts,
+                                            GmailMailMutator.getDeleteOperation(
+                                                    db.account().getAccount(accountHint),
+                                                    args.getBoolean("permanent")),
+                                            "message_missing", attemptToken);
+                                else
+                                    result.legacyRemoved.add(id);
+                                continue;
+                            }
 
-                        EntityOperation.queue(context, message, EntityOperation.DELETE);
-                    }
+                            EntityAccount owner = db.account().getAccount(message.account);
+                            if (owner == null || !owner.isGmailApi()) {
+                                if (accountHint > 0 || message.gmail_id != null) {
+                                    reportGmailDeleteFailure(db, message,
+                                            (owner == null ? accountHint : owner.id), result, refreshAccounts,
+                                            GmailMailMutator.getDeleteOperation(owner,
+                                                    args.getBoolean("permanent")),
+                                            owner == null ? "account_missing" : "account_not_gmail",
+                                            attemptToken);
+                                    continue;
+                                }
+                                String name = GmailMailMutator.getDeleteOperation(owner,
+                                        args.getBoolean("permanent"));
+                                if (owner != null && owner.isGraphApi() && args.getBoolean("permanent"))
+                                    name = EntityOperation.GRAPH_DELETE_PERMANENT;
+                                boolean queued = true;
+                                if (owner != null && owner.isZohoApi()) {
+                                    EntityFolder folder = db.folder().getFolder(message.folder);
+                                    queued = queueZohoDelete(context, db, owner, folder, message,
+                                            args.getBoolean("permanent"), args.getString("delete_trace"));
+                                } else {
+                                    String provider = ApiMutationLog.provider(owner);
+                                    if (provider != null && !"gmail".equals(provider))
+                                        ApiMutationLog.callback(provider, name, "trash", "accepted");
+                                    EntityOperation.queue(context, message, name);
+                                }
+                                if (queued) {
+                                    result.legacyRemoved.add(id);
+                                    wakeLegacy = true;
+                                } else
+                                    result.zohoSkipped++;
+                                continue;
+                            }
+
+                            if (accountHint > 0 && owner.id != accountHint) {
+                                reportGmailDeleteFailure(db, message, owner.id, result, refreshAccounts,
+                                        GmailMailMutator.getDeleteOperation(owner,
+                                                args.getBoolean("permanent")),
+                                        "source_account_mismatch", attemptToken);
+                                continue;
+                            }
+
+                            EntityFolder folder = db.folder().getFolder(message.folder);
+                            String name = GmailMailMutator.getDeleteOperation(owner,
+                                    args.getBoolean("permanent"));
+                            if (folder == null || !GmailMailMutator.canDeleteFromGmail(owner, folder, message)) {
+                                reportGmailDeleteFailure(db, message, owner.id, result, refreshAccounts,
+                                        name, folder == null ? "source_folder_missing" : "invalid_target",
+                                        attemptToken);
+                                continue;
+                            }
+
+                            GmailMutationLog.callback(name, GmailMutationLog.deleteTargetType(name),
+                                    "accepted", attemptToken);
+                            GmailMutationLog.QueueResult queueResult =
+                                    EntityOperation.queueGmailApiMutationDeferredTraced(
+                                            context, message, name, attemptToken);
+                            if (GmailPendingActionPolicy.shouldMarkPending(queueResult)) {
+                                GmailMutationLog.callback(name, GmailMutationLog.deleteTargetType(name),
+                                        "queued", attemptToken);
+                                db.message().setMessageUiBusy(message.id,
+                                        GmailPendingActionPolicy.PENDING_UNTIL_RESOLVED);
+                                result.gmailQueued.add(message.id);
+                                gmailWakeups.queued(owner.id, name, attemptToken);
+                            } else
+                                reportGmailDeleteFailure(db, message, owner.id, result, refreshAccounts,
+                                        name, GmailMutationLog.queueReason(queueResult), attemptToken);
+                        }
 
                     db.setTransactionSuccessful();
                 } finally {
                     db.endTransaction();
                 }
 
-                ServiceSynchronize.eval(context, "delete");
+                dispatchGmailMutationWakeups(context, gmailWakeups);
+                for (long accountId : refreshAccounts)
+                    ServiceSynchronize.reload(context, accountId, false,
+                            "Gmail delete source stale");
+                if (wakeLegacy)
+                    ServiceSynchronize.eval(context, "delete");
 
-                return null;
+                return result;
             }
 
             @Override
-            protected void onExecuted(Bundle args, Void data) {
-                if (viewType == AdapterMessage.ViewType.THREAD) {
-                    long[] ids = args.getLongArray("ids");
+            protected void onExecuted(Bundle args, DeleteCallbackResult data) {
+                if (data == null)
+                    return;
+                if (data.gmailSkipped > 0 && view != null)
+                    Helper.setSnackbarOptions(Snackbar.make(view,
+                            R.string.title_gmail_action_refresh, Snackbar.LENGTH_LONG)).show();
+                if (GmailPendingActionPolicy.shouldReturnToList(
+                        viewType == AdapterMessage.ViewType.THREAD,
+                        !data.gmailQueued.isEmpty(), !data.legacyRemoved.isEmpty())) {
+                    finish();
+                    return;
+                }
+                if (viewType == AdapterMessage.ViewType.THREAD && !data.legacyRemoved.isEmpty()) {
                     PagedList<TupleMessageEx> messages = adapter.getCurrentList();
-                    if (messages != null && ids.length > 0) {
-                        Log.i("Eval thread messages=" + messages.size() + " ids=" + ids.length);
-                        handleThreadActions(adapter.getCurrentList(), null, Helper.fromLongArray(ids));
+                    if (messages != null) {
+                        Log.i("Eval thread messages=" + messages.size() +
+                                " ids=" + data.legacyRemoved.size());
+                        handleThreadActions(adapter.getCurrentList(), null, data.legacyRemoved);
                     }
                 }
+                if (data.zohoSkipped > 0 && view != null)
+                    Helper.setSnackbarOptions(Snackbar.make(view,
+                            R.string.title_zoho_delete_refresh, Snackbar.LENGTH_LONG)).show();
             }
 
             @Override
             protected void onException(Bundle args, Throwable ex) {
+                long[] accountIds = args.getLongArray("gmail_account_ids");
+                if (accountIds != null && accountIds.length > 0) {
+                    GmailMutationLog.callback(
+                            GmailMailMutator.getDeleteOperation(null, args.getBoolean("permanent")),
+                            GmailMutationLog.deleteTargetType(
+                                    GmailMailMutator.getDeleteOperation(null, args.getBoolean("permanent"))),
+                            "callback_exception", null);
+                    Context context = getContext();
+                    if (context != null)
+                        for (long accountId : accountIds)
+                            if (accountId > 0)
+                                ServiceSynchronize.reload(context, accountId, false,
+                                        "Gmail delete callback failed");
+                    if (view != null)
+                        Helper.setSnackbarOptions(Snackbar.make(view,
+                                R.string.title_gmail_action_refresh, Snackbar.LENGTH_LONG)).show();
+                }
                 Log.unexpectedError(getParentFragmentManager(), ex);
             }
         }.execute(this, args, "messages:delete:execute");
@@ -11904,14 +12972,70 @@ public class FragmentMessages extends FragmentBase
                     EntityAccount sourceAccount = db.account().getAccount(message.account);
                     if (sourceAccount == null)
                         return result;
+                    String apiProvider = ApiMutationLog.provider(sourceAccount);
+                    if ("gmail".equals(apiProvider))
+                        apiProvider = null;
+                    EntityFolder messageSourceFolder = db.folder().getFolder(message.folder);
+                    if (sourceAccount.isNativeRestApi() && messageSourceFolder == null) {
+                        if (apiProvider != null)
+                            ApiMutationLog.callback(apiProvider, EntityOperation.MOVE, "other",
+                                    "source_folder_missing");
+                        return result;
+                    }
 
                     EntityFolder targetFolder = db.folder().getFolder(tid);
-                    if (targetFolder == null)
+                    if (targetFolder == null) {
+                        if (apiProvider != null)
+                            ApiMutationLog.callback(apiProvider, EntityOperation.MOVE, "other",
+                                    "destination_folder_missing");
                         return result;
+                    }
 
                     EntityAccount targetAccount = db.account().getAccount(targetFolder.account);
-                    if (targetAccount == null)
+                    if (targetAccount == null) {
+                        if (apiProvider != null)
+                            ApiMutationLog.callback(apiProvider, EntityOperation.MOVE,
+                                    ApiMutationLog.targetType(targetFolder.type), "account_missing");
                         return result;
+                    }
+                    if ((targetAccount.isGmailApi() && !sourceAccount.isGmailApi()) ||
+                            (targetAccount.isGraphApi() && !sourceAccount.isGraphApi()) ||
+                            (targetAccount.isZohoApi() && !sourceAccount.isZohoApi())) {
+                        String provider = (apiProvider == null ? ApiMutationLog.provider(targetAccount) : apiProvider);
+                        if (provider != null && !"gmail".equals(provider))
+                            ApiMutationLog.callback(provider, EntityOperation.MOVE,
+                                    ApiMutationLog.targetType(targetFolder.type), "account_mismatch");
+                        return result;
+                    }
+                    if (sourceAccount.isGmailApi() &&
+                            (copy || !GmailMailMutator.isValidMovePickerTarget(sourceAccount, targetFolder) ||
+                                    !GmailMailMutator.canMoveToTarget(sourceAccount, messageSourceFolder, message, targetFolder) ||
+                                    !Objects.equals(sourceAccount.id, targetAccount.id)))
+                        return result;
+                    if (sourceAccount.isGraphApi() &&
+                            !MessageSelectionCapabilities.canMoveGraphMessage(
+                                    true, copy, sourceAccount.id, targetAccount.isGraphApi(),
+                                    targetAccount.id, targetFolder.selectable, targetFolder.read_only,
+                                    targetFolder.graph_folder_id)) {
+                        ApiMutationLog.callback("graph", EntityOperation.MOVE,
+                                ApiMutationLog.targetType(targetFolder.type),
+                                (copy ? "copy_not_supported" :
+                                        (!targetAccount.isGraphApi() ||
+                                                !Objects.equals(sourceAccount.id, targetAccount.id)
+                                                ? "account_mismatch" : "invalid_target")));
+                        return result;
+                    }
+                    if (sourceAccount.isZohoApi() &&
+                            !ZohoMailMutator.isValidZohoMoveTarget(
+                                    sourceAccount, targetAccount, targetFolder, copy)) {
+                        ApiMutationLog.callback("zoho", EntityOperation.MOVE,
+                                ApiMutationLog.targetType(targetFolder.type),
+                                (copy ? "copy_not_supported" :
+                                        (!targetAccount.isZohoApi() ||
+                                                !Objects.equals(sourceAccount.id, targetAccount.id)
+                                                ? "account_mismatch" : "invalid_target")));
+                        return result;
+                    }
 
                     List<EntityMessage> messages = db.message().getMessagesByThread(
                             message.account, message.thread, threading && similar ? null : id, message.folder);
@@ -11920,9 +13044,15 @@ public class FragmentMessages extends FragmentBase
                             EntityOperation.queue(context, message, EntityOperation.COPY, tid);
                         else {
                             EntityFolder sourceFolder = db.folder().getFolder(threaded.folder);
-                            if (sourceFolder == null ||
-                                    sourceFolder.read_only ||
+                            if ((sourceAccount.isNativeRestApi() && sourceFolder == null) ||
+                                    (sourceAccount.isGmailApi() &&
+                                            !GmailMailMutator.canMoveToTarget(sourceAccount, sourceFolder, threaded, targetFolder)) ||
+                                    (!sourceAccount.isGmailApi() &&
+                                            !GmailMailMutator.canMoveFromSource(sourceAccount, sourceFolder, threaded)) ||
                                     sourceFolder.id.equals(targetFolder.id))
+                                continue;
+                            if (sourceAccount.isZohoApi() &&
+                                    !ZohoMailMutator.isWritableMessage(sourceAccount, sourceFolder, threaded))
                                 continue;
                             result.add(new MessageTarget(context, threaded, sourceAccount, sourceFolder, targetAccount, targetFolder));
                         }
@@ -11985,8 +13115,28 @@ public class FragmentMessages extends FragmentBase
                         if (folder == null)
                             continue;
 
+        if (account.isNativeRestApi() && !FolderActionCapabilities.canEmptyFolder(account, folder)) {
+                            EntityLog.log(context, "Refused stale/unsupported empty-folder action account=" +
+                                    account.id + " folder=" + folder.id + " type=" + folder.type);
+                            continue;
+                        }
+
                         EntityLog.log(context,
                                 "Empty account=" + account.name + " folder=" + folder.name + " count=" + folder.total);
+
+                        if (account.isGmailApi()) {
+                            EntityOperation.queue(context, folder, EntityOperation.EXPUNGE);
+                            continue;
+                        }
+                        if (account.isGraphApi() && EntityFolder.TRASH.equals(folder.type)) {
+                            EntityOperation.queueGraphTrashPurge(context, folder);
+                            continue;
+                        }
+                        if (account.isZohoApi()) {
+                            if (FolderActionCapabilities.canEmptyFolder(account, folder))
+                                EntityOperation.queue(context, folder, EntityOperation.PURGE);
+                            continue;
+                        }
 
                         List<Long> ids = db.message().getMessageByFolder(folder.id);
                         for (Long id : ids) {
@@ -12193,57 +13343,115 @@ public class FragmentMessages extends FragmentBase
         Boolean isArchive;
         Boolean isTrash;
         Boolean isJunk;
+        boolean allSelectedInTrashOrSpam = true;
         Boolean isDrafts;
         boolean hasImap;
         boolean hasPop;
         Boolean leave_on_server;
         Boolean leave_deleted;
         boolean read_only;
+        boolean gmailApiReadOnly;
+        boolean gmailApiSelected;
+        boolean gmailApiSingleAccount;
+        boolean gmailApiHasWritableTarget;
+        boolean gmailApiHasSpamTarget;
+        boolean gmailApiPermanentDeleteMessages = true;
+        boolean gmailApiArchiveMessages = true;
+        EntityAccount gmailApiAccount;
+        boolean zohoApiSelected;
+        boolean zohoApiReadOnly;
+        boolean zohoApiSingleAccount;
+        boolean zohoApiPermanentDelete = true;
+        EntityAccount zohoApiAccount;
+        boolean graphApiSelected;
+        boolean graphApiReadOnly;
+        boolean graphApiSingleAccount;
         List<Long> folders;
         List<EntityAccount> imapAccounts;
         EntityAccount copyto;
         TupleMessageEx single;
 
         boolean canInbox() {
-            if (read_only)
+            if (!MessageSelectionCapabilities.canModifySelection(
+                    read_only, gmailApiReadOnly, graphApiReadOnly, zohoApiReadOnly))
                 return false;
+            if (gmailApiSelected)
+                return MessageSelectionCapabilities.canReturnGmailMessageToInbox(
+                        true, gmailApiPermanentDeleteMessages, Boolean.TRUE.equals(hasInbox),
+                        Boolean.TRUE.equals(isSent), Boolean.TRUE.equals(isInbox));
             return ((hasInbox && !isInbox) ||
                     (leave_deleted != null && leave_deleted && isTrash));
         }
 
         boolean canArchive() {
-            if (read_only)
+            if (!MessageSelectionCapabilities.canModifySelection(
+                    read_only, gmailApiReadOnly, graphApiReadOnly, zohoApiReadOnly))
+                return false;
+            if (gmailApiSelected && Boolean.TRUE.equals(isSent))
+                return false;
+            if (gmailApiSelected && !gmailApiArchiveMessages)
                 return false;
             return (hasArchive && !isArchive);
         }
 
         boolean canJunk() {
-            if (read_only)
+            if (!MessageSelectionCapabilities.canModifySelection(
+                    read_only, gmailApiReadOnly, graphApiReadOnly, zohoApiReadOnly))
                 return false;
+            if (gmailApiSelected)
+                return MessageSelectionCapabilities.canReportGmailSpam(
+                        true, gmailApiPermanentDeleteMessages, gmailApiSingleAccount, gmailApiHasSpamTarget,
+                        Boolean.TRUE.equals(isSent), Boolean.TRUE.equals(isJunk),
+                        Boolean.TRUE.equals(isDrafts) || !gmailApiPermanentDeleteMessages);
             return (hasJunk && !isJunk && !isDrafts) ||
                     (hasPop && isInbox && !isSent && !hasImap);
         }
 
         boolean canTrash() {
-            if (read_only)
+            if (!MessageSelectionCapabilities.canModifySelection(
+                    read_only, gmailApiReadOnly, graphApiReadOnly, zohoApiReadOnly))
                 return false;
+            if (gmailApiSelected)
+                return MessageSelectionCapabilities.canTrashGmailMessage(
+                        true, gmailApiPermanentDeleteMessages, Boolean.TRUE.equals(hasTrash),
+                        Boolean.TRUE.equals(isTrash));
             return (!isTrash && hasTrash && !isJunk) ||
                     (hasPop && Boolean.TRUE.equals(leave_deleted) && isInbox);
         }
 
         boolean canDelete() {
-            if (read_only)
+            if (!MessageSelectionCapabilities.canModifySelection(
+                    read_only, gmailApiReadOnly, graphApiReadOnly, zohoApiReadOnly))
                 return false;
+            if (gmailApiSelected)
+                return gmailApiPermanentDeleteMessages;
             return (!hasPop || !Boolean.TRUE.equals(leave_deleted) || (isTrash || isDrafts || isSent));
         }
 
-        boolean canMove() {
-            if (read_only)
-                return false;
-            return (!hasPop || Boolean.TRUE.equals(leave_on_server)) && (imapAccounts.size() > 0);
+        boolean canDeletePermanently() {
+            return MessageSelectionCapabilities.canDeletePermanently(
+                    canDelete(), gmailApiSelected, graphApiSelected, zohoApiSelected,
+                    zohoApiPermanentDelete, allSelectedInTrashOrSpam);
         }
 
-        static MoreResult get(Context context, long[] ids, boolean threading, boolean all) {
+        boolean canMove() {
+            if (zohoApiSelected)
+                return MessageSelectionCapabilities.canMoveToZohoFolder(
+                        read_only, zohoApiReadOnly, zohoApiSingleAccount);
+            if (gmailApiSelected)
+                return MessageSelectionCapabilities.canMoveToGmailFolder(
+                        gmailApiSelected, gmailApiReadOnly, gmailApiSingleAccount,
+                        gmailApiHasWritableTarget, Boolean.TRUE.equals(isSent));
+            boolean singleWritableGraphAccount = (graphApiSingleAccount &&
+                    copyto != null && copyto.isGraphApi());
+            return MessageSelectionCapabilities.canMoveToFolder(
+                    read_only, graphApiSelected, graphApiReadOnly,
+                    singleWritableGraphAccount, hasPop, leave_on_server,
+                    imapAccounts.size() > 0);
+        }
+
+        static MoreResult get(Context context, long[] ids, boolean threading, boolean all,
+                              long sourceViewId) {
             Map<Long, EntityAccount> accounts = new HashMap<>();
             Map<Long, EntityFolder> folders = new HashMap<>();
 
@@ -12266,7 +13474,6 @@ public class FragmentMessages extends FragmentBase
                 EntityMessage message = db.message().getMessage(id);
                 if (message == null)
                     continue;
-
                 EntityAccount account = accounts.get(message.account);
                 if (account == null) {
                     account = db.account().getAccount(message.account);
@@ -12274,26 +13481,61 @@ public class FragmentMessages extends FragmentBase
                         continue;
                     accounts.put(account.id, account);
                 }
+                if (account.isGmailApi()) {
+                    result.gmailApiSelected = true;
+                    EntityFolder currentFolder = db.folder().getFolder(message.folder);
+                    if (!GmailMailMutator.isWritableMessage(account, currentFolder, message))
+                        result.gmailApiReadOnly = true;
+                    if (result.gmailApiAccount == null)
+                        result.gmailApiAccount = account;
+                    if (!GmailMailMutator.canDeleteFromGmail(account, currentFolder, message))
+                        result.gmailApiPermanentDeleteMessages = false;
+                    if (!GmailMailMutator.canArchiveFromGmail(account, currentFolder, message))
+                        result.gmailApiArchiveMessages = false;
+                }
 
                 EntityFolder folder = folders.get(message.folder);
                 if (folder == null) {
                     folder = db.folder().getFolder(message.folder);
                     if (folder == null)
                         continue;
-                    if (folder.read_only)
+                    if (folder.read_only && !(account.isGmailApi() &&
+                            GmailMailMutator.isWritableMessage(account, folder, message)))
                         result.read_only = true;
                     folders.put(folder.id, folder);
+                }
+
+                EntityFolder actionFolder = folder;
+                if (account.isGmailApi() && sourceViewId >= 0) {
+                    EntityFolder viewFolder = db.folder().getFolder(sourceViewId);
+                    if (viewFolder != null && (Objects.equals(viewFolder.account, account.id) ||
+                            (viewFolder.account == null && Boolean.TRUE.equals(viewFolder.unified))))
+                        actionFolder = viewFolder;
                 }
 
                 if (!result.folders.contains(message.folder))
                     result.folders.add(message.folder);
 
-                boolean isInbox = EntityFolder.INBOX.equals(folder.type);
-                boolean isArchive = EntityFolder.ARCHIVE.equals(folder.type);
-                boolean isTrash = (EntityFolder.TRASH.equals(folder.type));
-                boolean isJunk = EntityFolder.JUNK.equals(folder.type);
-                boolean isDrafts = EntityFolder.DRAFTS.equals(folder.type);
-                boolean isSent = EntityFolder.SENT.equals(folder.type);
+                if (account.isGraphApi()) {
+                    result.graphApiSelected = true;
+                    if (message.graph_id == null || folder.read_only || !folder.selectable)
+                        result.graphApiReadOnly = true;
+                }
+                if (account.isZohoApi()) {
+                    result.zohoApiSelected = true;
+                    if (result.zohoApiAccount == null)
+                        result.zohoApiAccount = account;
+                    if (!ZohoMailMutator.isWritableMessage(account, folder, message))
+                        result.zohoApiReadOnly = true;
+                }
+
+                boolean isInbox = EntityFolder.INBOX.equals(actionFolder.type);
+                boolean isArchive = EntityFolder.ARCHIVE.equals(actionFolder.type);
+                boolean isTrash = (EntityFolder.TRASH.equals(actionFolder.type));
+                boolean isJunk = EntityFolder.JUNK.equals(actionFolder.type);
+                result.allSelectedInTrashOrSpam &= (isTrash || isJunk);
+                boolean isDrafts = EntityFolder.DRAFTS.equals(actionFolder.type);
+                boolean isSent = EntityFolder.SENT.equals(actionFolder.type);
 
                 if (account.protocol == EntityAccount.TYPE_POP && isSent)
                     isInbox = true;
@@ -12388,7 +13630,25 @@ public class FragmentMessages extends FragmentBase
 
                 if (accounts.size() == 1 && account.protocol == EntityAccount.TYPE_IMAP)
                     result.copyto = account;
+
+                if (account.isGmailApi()) {
+                    EntityFolder spam = db.folder().getFolderByGmailLabelId(account.id, "SPAM");
+                    result.gmailApiHasSpamTarget |= (spam != null && spam.selectable &&
+                            EntityFolder.JUNK.equals(spam.type) && "SPAM".equals(spam.gmail_label_id));
+                    // Gmail labels are mutated via REST; their legacy IMAP read-only marker
+                    // must not hide them from this REST-validated destination scan.
+                    List<EntityFolder> gmailFolders = db.folder().getFolders(account.id, false, true);
+                    result.gmailApiHasWritableTarget = GmailMailMutator.hasValidMovePickerTarget(
+                            account, gmailFolders);
+                }
             }
+
+            result.gmailApiSingleAccount = (result.gmailApiSelected && accounts.size() == 1 &&
+                    result.gmailApiAccount != null && result.gmailApiAccount.isGmailApi());
+            result.graphApiSingleAccount = (result.graphApiSelected && accounts.size() == 1 &&
+                    result.copyto != null && result.copyto.isGraphApi());
+            result.zohoApiSingleAccount = (result.zohoApiSelected && accounts.size() == 1 &&
+                    result.zohoApiAccount != null && result.zohoApiAccount.isZohoApi());
 
             if (result.isInbox == null) result.isInbox = false;
             if (result.isSent == null) result.isSent = false;
@@ -12495,10 +13755,12 @@ public class FragmentMessages extends FragmentBase
         static class Account implements Serializable {
             long id;
             String name;
+            boolean gmailApi;
 
             Account(EntityAccount account) {
                 this.id = account.id;
                 this.name = account.name;
+                this.gmailApi = account.isGmailApi();
             }
         }
 

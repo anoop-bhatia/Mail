@@ -19,7 +19,6 @@ package eu.faircode.email;
     Copyright 2018-2026 by Marcel Bokhorst (M66B)
 */
 
-import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_GMAIL;
 import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_PASSWORD;
 
 import android.annotation.TargetApi;
@@ -265,10 +264,11 @@ public class AdapterAccount extends RecyclerView.Adapter<AdapterAccount.ViewHold
                 ivSync.setContentDescription(context.getString(account.synchronize ? R.string.title_legend_synchronize_on : R.string.title_legend_synchronize_off));
                 ivSync.setVisibility(View.VISIBLE);
 
-                ivOAuth.setImageDrawable(ContextCompat.getDrawable(context, account.auth_type == AUTH_TYPE_GMAIL
+                ivOAuth.setImageDrawable(ContextCompat.getDrawable(context, account.isNativeRestApi()
                         ? R.drawable.twotone_android_24 : R.drawable.twotone_security_24));
                 ivOAuth.setVisibility(
-                        settings && account.auth_type != AUTH_TYPE_PASSWORD ? View.VISIBLE : View.GONE);
+                        settings && (account.auth_type != AUTH_TYPE_PASSWORD || account.isNativeRestApi())
+                                ? View.VISIBLE : View.GONE);
                 ivPrimary.setVisibility(account.primary ? View.VISIBLE : View.GONE);
                 ivNotify.setVisibility(account.notify ? View.VISIBLE : View.GONE);
 
@@ -292,9 +292,9 @@ public class AdapterAccount extends RecyclerView.Adapter<AdapterAccount.ViewHold
                     tvName.setTextColor(account.unseen > 0 ? colorUnread : textColorSecondary);
                 }
 
+                boolean nativeApi = account.isNativeRestApi();
                 StringBuilder user = new StringBuilder(account.user);
-                if (account.provider != null && (BuildConfig.DEBUG || debug))
-                    user.append(" (").append(account.provider).append(')');
+                user.append(AccountListPresentation.getProviderSuffix(account, BuildConfig.DEBUG || debug));
                 tvUser.setText(user);
                 tvUser.setVisibility(show_users ? View.VISIBLE : View.GONE);
 
@@ -318,7 +318,13 @@ public class AdapterAccount extends RecyclerView.Adapter<AdapterAccount.ViewHold
                 }
                 ivState.setVisibility(account.synchronize || account.state != null ? View.VISIBLE : View.INVISIBLE);
 
-                tvHost.setText(String.format("%s:%d/%s",
+                String apiLabel = (account.isGraphApi()
+                        ? context.getString(R.string.title_account_graph_api)
+                        : account.isZohoApi()
+                        ? context.getString(R.string.title_account_zoho_api)
+                        : nativeApi ? context.getString(R.string.title_account_gmail_api) : null);
+                tvHost.setText(GmailApiEndpointLabel.format(nativeApi,
+                        apiLabel,
                         account.host,
                         account.port,
                         EmailService.getEncryptionName(account.encryption)));
@@ -330,13 +336,10 @@ public class AdapterAccount extends RecyclerView.Adapter<AdapterAccount.ViewHold
                         account.created == null ? null : DTF.format(account.created)));
                 tvLast.setVisibility(compact ? View.GONE : View.VISIBLE);
                 tvLast.setText(context.getString(R.string.title_last_connected,
-                        (account.last_connected == null ? "-" : DTF.format(account.last_connected)) +
-                                (BuildConfig.DEBUG ?
-                                        "/" + (account.last_modified == null ? "-" : DTF.format(account.last_modified)) +
-                                        " " + account.poll_interval +
-                                        "/" + account.keep_alive_ok +
-                                        "/" + account.keep_alive_failed +
-                                        "/" + account.keep_alive_succeeded : "")));
+                        AccountListPresentation.formatLastConnected(account,
+                                account.last_connected == null ? "-" : DTF.format(account.last_connected),
+                                account.last_modified == null ? "-" : DTF.format(account.last_modified),
+                                BuildConfig.DEBUG)));
 
                 tvBackoff.setText(context.getString(R.string.title_backoff_until,
                         account.backoff_until == null ? "-" : DTF.format(account.backoff_until)));
@@ -364,7 +367,8 @@ public class AdapterAccount extends RecyclerView.Adapter<AdapterAccount.ViewHold
                     tvQuota.setVisibility(View.VISIBLE);
 
                 tvId.setText(account.id + "/" + account.uuid);
-                tvId.setVisibility(settings && BuildConfig.DEBUG ? View.VISIBLE : View.GONE);
+                tvId.setVisibility(AccountListPresentation.showDebugId(settings, BuildConfig.DEBUG, account)
+                        ? View.VISIBLE : View.GONE);
 
                 tvCapabilities.setText(account.capabilities);
 

@@ -20,7 +20,6 @@ package eu.faircode.email;
 */
 
 import static android.app.Activity.RESULT_OK;
-import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_GMAIL;
 import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_PASSWORD;
 
 import android.app.NotificationChannel;
@@ -932,17 +931,19 @@ public class FragmentOptionsBackup extends FragmentBase implements SharedPrefere
                                 continue;
                             }
 
-                            if (account.auth_type == AUTH_TYPE_GMAIL &&
-                                    GmailState.getAccount(context, account.user) == null) {
-                                SpannableStringBuilder ssb = new SpannableStringBuilderEx();
-                                ssb.append(account.name).append(": ");
-                                ssb.append(context.getString(R.string.title_importing_wizard));
-                                ssb.setSpan(new StyleSpan(Typeface.BOLD), 0, ssb.length(), 0);
-                                ssb.setSpan(new ForegroundColorSpan(colorWarning), 0, ssb.length(), 0);
-                                postProgress(ssb);
-                                EntityLog.log(context, "Run wizard account=" + account.name +
-                                        "id=" + account.id);
-                                account.synchronize = false;
+                            if (account.isGmailApi()) {
+                                account.auth_type = ServiceAuthenticator.AUTH_TYPE_GMAIL;
+                                if (!GmailState.hasAuthorization(account.password)) {
+                                    SpannableStringBuilder ssb = new SpannableStringBuilderEx();
+                                    ssb.append(account.name).append(": ");
+                                    ssb.append(context.getString(R.string.title_importing_wizard));
+                                    ssb.setSpan(new StyleSpan(Typeface.BOLD), 0, ssb.length(), 0);
+                                    ssb.setSpan(new ForegroundColorSpan(colorWarning), 0, ssb.length(), 0);
+                                    postProgress(ssb);
+                                    EntityLog.log(context, "Run wizard account=" + account.name +
+                                            "id=" + account.id);
+                                    account.synchronize = false;
+                                }
                             }
 
                             Long aid = account.id;

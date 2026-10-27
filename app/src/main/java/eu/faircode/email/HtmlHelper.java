@@ -115,10 +115,12 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -1439,7 +1441,7 @@ public class HtmlHelper {
             String alt = img.attr("alt");
             String src = img.attr("src");
             String tracking = img.attr("x-tracking");
-            boolean isInline = src.startsWith("cid:");
+            boolean blocked = HtmlImagePlaceholder.isBlocked(src, show_images, inline_images);
 
             if (TextUtils.isEmpty(src)) {
                 Log.i("Removing empty image");
@@ -1447,14 +1449,14 @@ public class HtmlHelper {
                 continue;
             }
 
-            if (!show_images && !(inline_images && isInline) && !image_placeholders) {
+            if (blocked && !image_placeholders) {
                 Log.i("Removing placeholder");
                 img.removeAttr("src");
                 continue;
             }
 
             // Remove spacer, etc
-            if (!show_images && !(inline_images && isInline) && TextUtils.isEmpty(tracking)) {
+            if (blocked && TextUtils.isEmpty(tracking)) {
                 Integer width = Helper.parseInt(img.attr("width").trim());
                 Integer height = Helper.parseInt(img.attr("height").trim());
                 if (width != null && height != null) {
@@ -1474,10 +1476,10 @@ public class HtmlHelper {
             if (alt.length() > MAX_ALT)
                 alt = alt.substring(0, MAX_ALT) + "…";
 
-            if (!show_images && !(inline_images && isInline))
+            if (blocked)
                 if (TextUtils.isEmpty(tracking)) {
+                    boolean linked = false;
                     if (TextUtils.isEmpty(alt)) {
-                        boolean linked = false;
                         Element p = img.parent();
                         while (p != null && !linked)
                             if ("a".equals(p.tagName())) {
@@ -1489,13 +1491,13 @@ public class HtmlHelper {
                                 linked = true;
                             } else
                                 p = p.parent();
-                        if (linked)
-                            alt = context.getString(R.string.title_image_link);
                     }
-                    if (!TextUtils.isEmpty(alt)) {
+                    String label = HtmlImagePlaceholder.getLabel(alt, linked,
+                            context.getString(R.string.title_image_link));
+                    if (!TextUtils.isEmpty(label)) {
                         Element a = document.createElement("a")
                                 .attr("href", src)
-                                .text("[" + alt + "]")
+                                .text(label)
                                 .attr("x-font-size-abs", Integer.toString(textSizeSmall));
                         img.appendChild(a);
                     }
@@ -1535,6 +1537,11 @@ public class HtmlHelper {
     }
 
     static void removeRelativeLinks(Document document) {
+        removeRelativeLinks(document, null, null);
+    }
+
+    static void removeRelativeLinks(Document document, EntityMessage message,
+                                    List<EntityAttachment> attachments) {
         // https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
         Elements b = document.select("base");
         String base = (b.size() > 0 ? b.get(0).attr("href") : null);
@@ -1542,20 +1549,33 @@ public class HtmlHelper {
             String attr = ("a".equals(e.tagName()) ? "href" : "src");
             String link = e.attr(attr);
 
-            if (!TextUtils.isEmpty(base))
-                try {
-                    // https://developer.android.com/reference/java/net/URI
-                    link = URI.create(base).resolve(link.replace(" ", "%20")).toString();
-                    e.attr(attr, link);
-                } catch (Throwable ex) {
-                    Log.w(ex);
-                }
+            if (!TextUtils.isEmpty(base)) {
+                link = resolveRelativeLink(base, link,
+                        "img".equals(e.tagName()) && NativeApiContentOperations.hasZohoInlineImageReference(
+                                message, attachments, link));
+                e.attr(attr, link);
+            }
 
             if ("a".equals(e.tagName()) &&
                     link.trim().startsWith("#")) {
                 e.tagName("span");
                 e.removeAttr(attr);
             }
+        }
+    }
+
+    static String resolveRelativeLink(String base, String link, boolean preserveZohoImageDisplay) {
+        if (preserveZohoImageDisplay &&
+                NativeApiContentOperations.getZohoImageDisplayCid(link) != null)
+            return link;
+        if (base == null || base.isEmpty())
+            return link;
+        try {
+            // https://developer.android.com/reference/java/net/URI
+            return URI.create(base).resolve(link.replace(" ", "%20")).toString();
+        } catch (Throwable ex) {
+            Log.w(ex);
+            return link;
         }
     }
 
@@ -1725,17 +1745,31 @@ public class HtmlHelper {
     }
 
     static void guessSchemes(Document document) {
+        guessSchemes(document, null, null);
+    }
+
+    static void guessSchemes(Document document, EntityMessage message,
+                             List<EntityAttachment> attachments) {
         for (Element e : document.select("a,img"))
             try {
                 String attr = ("a".equals(e.tagName()) ? "href" : "src");
                 String url = e.attr(attr);
                 if (TextUtils.isEmpty(url))
                     continue;
+                // Keep matched Zoho ImageDisplay roots intact until cached CID embedding.
+                if (!shouldGuessScheme(e.tagName(), message, attachments, url))
+                    continue;
                 Uri uri = UriHelper.guessScheme(Uri.parse(url));
                 e.attr(attr, uri.toString());
             } catch (Throwable ex) {
                 Log.e(ex);
             }
+    }
+
+    static boolean shouldGuessScheme(String tagName, EntityMessage message,
+                                     List<EntityAttachment> attachments, String source) {
+        return (!"img".equals(tagName) ||
+                !NativeApiContentOperations.hasZohoInlineImageReference(message, attachments, source));
     }
 
     static void normalizeNamespaces(Document parsed, boolean display_hidden) {
@@ -2528,24 +2562,129 @@ public class HtmlHelper {
     }
 
     static void embedInlineImages(Context context, long id, Document document, boolean local) throws IOException {
+        embedInlineImages(context, id, document, local, true, true);
+    }
+
+    static void embedInlineImages(Context context, long id, Document document, boolean local,
+                                  boolean showImages, boolean inlineImages) throws IOException {
+        embedInlineImagesInternal(context, id, document, local, showImages, inlineImages, false);
+    }
+
+    static void embedInlineImages(Context context, long id, Document document, boolean local,
+                                  boolean showImages, boolean inlineImages,
+                                  boolean compactTextView) throws IOException {
+        embedInlineImagesInternal(context, id, document, local, showImages, inlineImages,
+                compactTextView);
+    }
+
+    private static void embedInlineImagesInternal(Context context, long id, Document document,
+                                                  boolean local, boolean showImages,
+                                                  boolean inlineImages, boolean compactTextView)
+            throws IOException {
         DB db = DB.getInstance(context);
+        EntityMessage message = db.message().getMessage(id);
+        boolean zohoMessage = (message != null && !TextUtils.isEmpty(message.zoho_id));
+        Set<Long> queued = new HashSet<>();
+        int imageDisplayQueries = 0;
+        int attachmentInfoMatches = 0;
+        int rawContentIdMatches = 0;
+        int sourceRewrites = 0;
         for (Element img : document.select("img")) {
             String src = img.attr("src");
-            if (src.startsWith("cid:")) {
-                String cid = '<' + src.substring(4) + '>';
+            String cid = null;
+            boolean zohoImageDisplay = false;
+            if (src.startsWith("cid:"))
+                cid = '<' + src.substring(4) + '>';
+            else if (zohoMessage) {
+                cid = NativeApiContentOperations.getZohoImageDisplayCid(src);
+                zohoImageDisplay = (cid != null);
+                if (zohoImageDisplay)
+                    imageDisplayQueries++;
+            }
+            if (cid != null) {
                 EntityAttachment attachment = db.attachment().getAttachment(id, cid);
+                boolean inlineImageRow = (zohoImageDisplay &&
+                        NativeApiContentOperations.isZohoApiCidImage(message, attachment));
+                boolean sourceMatchesRow = (inlineImageRow &&
+                        NativeApiContentOperations.matchesZohoCidReference(message, attachment, src));
+                if (zohoImageDisplay) {
+                    String folderId = (attachment == null || TextUtils.isEmpty(attachment.provider_folder)
+                            ? null : attachment.provider_folder);
+                    if (TextUtils.isEmpty(folderId))
+                        try {
+                            folderId = NativeApiContentOperations.getZohoFolderId(db, message);
+                        } catch (IOException ignored) {
+                        }
+                    ZohoApiDiagnostics.logInlineCidAssociation(context, folderId, message.zoho_id,
+                            cid, attachment != null, inlineImageRow, sourceMatchesRow);
+                }
+                if (inlineImageRow) {
+                    attachmentInfoMatches++;
+                    if (sourceMatchesRow)
+                        rawContentIdMatches++;
+                }
+                if (zohoImageDisplay &&
+                        !NativeApiContentOperations.isZohoApiCidImage(message, attachment))
+                    continue;
+                boolean compactZohoCid = (compactTextView && zohoMessage && cid != null &&
+                        NativeApiContentOperations.isZohoApiCidImage(message, attachment));
+                if (compactZohoCid) {
+                    if (zohoImageDisplay && sourceMatchesRow &&
+                            NativeApiContentOperations.shouldEmbedZohoInlineImages(
+                            message, showImages, inlineImages)) {
+                        String source = NativeApiContentOperations.rewriteZohoImageDisplaySource(
+                                message, attachment, src, null, showImages, inlineImages, true);
+                        if (!TextUtils.equals(src, source)) {
+                            img.attr("src", source);
+                            sourceRewrites++;
+                        }
+                    }
+                    if (attachment != null && !attachment.available)
+                        queueRenderedInlineAttachment(context, db, message, attachment, queued);
+                    continue;
+                }
                 if (attachment != null && attachment.available) {
                     File file = attachment.getFile(context);
-                    if (local) {
+                    if (zohoImageDisplay) {
+                        // The Zoho ImageDisplay URL is web-only; use the already-fetched API bytes.
+                        if (sourceMatchesRow && NativeApiContentOperations.shouldEmbedZohoInlineImages(
+                                message, showImages, inlineImages)) {
+                            String source = ImageHelper.getDataUri(file, attachment.type);
+                            source = NativeApiContentOperations.rewriteZohoImageDisplaySource(
+                                    message, attachment, src, source, showImages, inlineImages);
+                            img.attr("src", source);
+                            if (!TextUtils.equals(src, source))
+                                sourceRewrites++;
+                            Log.i("Inline image type=" + attachment.type);
+                        }
+                    } else if (local) {
                         Uri uri = FileProviderEx.getUri(context, BuildConfig.APPLICATION_ID, file, attachment.name);
                         img.attr("src", uri.toString());
                         Log.i("Inline image uri=" + uri);
                     } else {
-                        img.attr("src", ImageHelper.getDataUri(file, attachment.type));
+                        String source = ImageHelper.getDataUri(file, attachment.type);
+                        img.attr("src", source);
                         Log.i("Inline image type=" + attachment.type);
                     }
+                } else if (attachment != null) {
+                    queueRenderedInlineAttachment(context, db, message, attachment, queued);
                 }
             }
+        }
+        if (zohoMessage)
+            ZohoApiDiagnostics.logInlineMapping(context, imageDisplayQueries,
+                    attachmentInfoMatches, rawContentIdMatches, sourceRewrites,
+                    (compactTextView ? "compact" : "html"));
+    }
+
+    private static void queueRenderedInlineAttachment(Context context, DB db, EntityMessage message,
+                                                      EntityAttachment attachment, Set<Long> queued) {
+        EntityAccount account = (message == null || message.account == null
+                ? null : db.account().getAccount(message.account));
+        if (NativeApiContentOperations.shouldFetchRenderedInline(account, attachment) &&
+                queued.add(attachment.id)) {
+            EntityOperation.queue(context, message, EntityOperation.ATTACHMENT, attachment.id);
+            ServiceSynchronize.eval(context, account.id, "Native inline CID requested");
         }
     }
 

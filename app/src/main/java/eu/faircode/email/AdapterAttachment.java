@@ -206,19 +206,7 @@ public class AdapterAttachment extends RecyclerView.Adapter<AdapterAttachment.Vi
             progressbar.setVisibility(
                     attachment.progress == null || attachment.available ? View.GONE : View.VISIBLE);
 
-            StringBuilder sb = new StringBuilder();
-            sb.append(attachment.type);
-            if (debug || BuildConfig.DEBUG) {
-                if (attachment.cid != null) {
-                    sb.append(' ').append(attachment.cid);
-                    if (attachment.related != null)
-                        sb.append(' ').append(attachment.related);
-                    sb.append(' ').append(attachment.section).append('/').append(attachment.sequence);
-                }
-                if (attachment.isEncryption())
-                    sb.append(' ').append(attachment.encryption);
-            }
-            tvType.setText(sb.toString());
+            tvType.setText(AttachmentSubtitleFormatter.format(attachment, debug || BuildConfig.DEBUG));
 
             tvError.setText(attachment.error);
             tvError.setTextColor(Helper.resolveColor(context, attachment.available ? R.attr.colorWarning : androidx.appcompat.R.attr.colorError));
@@ -589,17 +577,21 @@ public class AdapterAttachment extends RecyclerView.Adapter<AdapterAttachment.Vi
                         if (account == null)
                             return null;
 
-                        if (account.protocol == EntityAccount.TYPE_IMAP && message.uid == null)
+                        if (NativeApiContentOperations.hasMissingLegacyImapUid(account, message))
                             return null;
 
                         if (!"connected".equals(account.state) && !account.isTransient(context))
                             reload = account.id;
 
                         EntityAttachment attachment = db.attachment().getAttachment(id);
-                        if (attachment == null || attachment.progress != null || attachment.available)
+                        if (!NativeApiContentOperations.shouldQueueAttachmentTap(attachment))
                             return null;
 
                         EntityOperation.queue(context, message, EntityOperation.ATTACHMENT, id);
+                        if (NativeApiContentOperations.supportsAccount(account))
+                            NativeApiDiagnostics.logContentOperationEvent(context,
+                                    NativeApiContentOperations.providerFor(account),
+                                    "attachment", "queued");
 
                         db.setTransactionSuccessful();
                     } finally {

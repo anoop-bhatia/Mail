@@ -184,6 +184,10 @@ public class DebugHelper {
     }
 
     static EntityMessage getDebugInfo(Context context, String source, int title, Throwable ex, String log, Bundle args) throws IOException, JSONException {
+        return getDebugInfo(context, source, title, ex, log, args, null);
+    }
+
+    static EntityMessage getDebugInfo(Context context, String source, int title, Throwable ex, String log, Bundle args, Address recipient) throws IOException, JSONException {
         StringBuilder sb = new StringBuilder();
         sb.append(context.getString(title)).append("\n\n");
         if (args != null) {
@@ -225,7 +229,7 @@ public class DebugHelper {
             draft.msgid = EntityMessage.generateMessageId();
             draft.thread = draft.msgid;
             draft.from = new Address[]{new InternetAddress(identity.email, identity.name, StandardCharsets.UTF_8.name())};
-            draft.to = new Address[]{Log.myAddress()};
+            draft.to = new Address[]{(recipient == null ? Log.myAddress() : recipient)};
             draft.subject = context.getString(R.string.app_name) + " " + getVersionInfo(context) + " debug info - " + source;
             draft.received = new Date().getTime();
             draft.seen = true;
@@ -1274,6 +1278,17 @@ public class DebugHelper {
         }
     }
 
+    static String formatLogEntry(EntityLog entry, DateFormat format) {
+        return String.format("%s [%d:%d:%d:%d:%d] %s\r\n",
+                format.format(entry.time),
+                entry.type.ordinal(),
+                (entry.thread == null ? 0 : entry.thread),
+                (entry.account == null ? 0 : entry.account),
+                (entry.folder == null ? 0 : entry.folder),
+                (entry.message == null ? 0 : entry.message),
+                entry.data);
+    }
+
     private static void attachLog(Context context, long id, int sequence) {
         try {
             DB db = DB.getInstance(context);
@@ -1303,14 +1318,7 @@ public class DebugHelper {
                 size += write(os, "\r\n");
 
                 for (EntityLog entry : db.log().getLogs(from, null)) {
-                    size += write(os, String.format("%s [%d:%d:%d:%d:%d] %s\r\n",
-                            TF.format(entry.time),
-                            entry.type.ordinal(),
-                            (entry.thread == null ? 0 : entry.thread),
-                            (entry.account == null ? 0 : entry.account),
-                            (entry.folder == null ? 0 : entry.folder),
-                            (entry.message == null ? 0 : entry.message),
-                            entry.data));
+                    size += write(os, formatLogEntry(entry, TF));
                     if (size > MAX_LOG_SIZE) {
                         size += write(os, "<truncated>\r\n");
                         break;

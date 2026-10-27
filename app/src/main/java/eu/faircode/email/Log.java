@@ -133,7 +133,9 @@ public class Log {
     ));
 
     static {
-        System.loadLibrary("fairemail");
+        // JVM unit tests exercise Java logging without packaging the Android JNI library.
+        if (System.getProperty("org.gradle.test.worker") == null)
+            System.loadLibrary("fairemail");
     }
 
     public static native void jni_set_log_level(int level);
@@ -215,6 +217,18 @@ public class Log {
             org.tinylog.Logger.tag(TAG).error(type.name() + " " + message);
         else
             EntityLog.log(ctx, type, message);
+    }
+
+    static boolean isProtocolLoggingEnabled() {
+        Context context = ctx;
+        return (context != null &&
+                PreferenceManager.getDefaultSharedPreferences(context).getBoolean("protocol", false));
+    }
+
+    static void persistProtocolEvent(String message) {
+        Context context = ctx;
+        if (context != null)
+            EntityLog.logProtocol(context, message);
     }
 
     static void setCrashReporting(boolean enabled) {

@@ -112,6 +112,9 @@ public class EntityAttachment {
     public String disposition;
     public String cid; // Content-ID
     public Boolean related; // inline
+    public String provider_id;
+    public String provider_folder;
+    public String provider_type;
     public Integer encryption;
     public Long size;
     public Integer progress;

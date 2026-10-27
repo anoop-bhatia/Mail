@@ -25,6 +25,10 @@ public class TupleAccountState extends EntityAccount {
     // TODO: folder property changes (name, poll)
     public int folders;
     public int operations;
+    // Wakes a sleeping Graph monitor on queued writes; deliberately excluded from equals().
+    public int graph_write_operations;
+    // Wakes a sleeping Zoho monitor on writes or requested folder refreshes; excluded from equals().
+    public int zoho_wakeup_operations;
 
     @Override
     public boolean equals(Object obj) {

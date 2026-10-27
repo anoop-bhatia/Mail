@@ -141,7 +141,7 @@ public class EntityAccount extends EntityOrder implements Serializable {
     public Long swipe_right;
     public Long move_to;
     @NonNull
-    public Integer poll_interval = DEFAULT_KEEP_ALIVE_INTERVAL;
+    public Integer poll_interval = DEFAULT_POLL_INTERVAL;
     @NonNull
     public Boolean keep_alive_noop = false;
     @NonNull
@@ -183,9 +183,51 @@ public class EntityAccount extends EntityOrder implements Serializable {
     public Boolean capability_uidl;
     public Long last_modified; // sync
 
-    boolean isGmail() {
+    // Gmail REST synchronization cursors; deliberately excluded from account JSON backups.
+    public String gmail_history_id;
+    public String gmail_full_sync_history_id;
+    public String gmail_full_sync_page_token;
+    public String gmail_history_page_token;
+    public String gmail_history_pending;
+
+    static boolean isGmailHost(String host) {
         return "imap.gmail.com".equalsIgnoreCase(host) ||
-                "imap.googlemail.com".equalsIgnoreCase(host);
+                "imap.googlemail.com".equalsIgnoreCase(host) ||
+                "pop.gmail.com".equalsIgnoreCase(host) ||
+                "pop.googlemail.com".equalsIgnoreCase(host) ||
+                "smtp.gmail.com".equalsIgnoreCase(host) ||
+                "smtp.googlemail.com".equalsIgnoreCase(host);
+    }
+
+    static boolean isGmailDomain(String domain) {
+        return "gmail.com".equalsIgnoreCase(domain) ||
+                "googlemail.com".equalsIgnoreCase(domain);
+    }
+
+    boolean isGmailApi() {
+        return (auth_type != null && auth_type == ServiceAuthenticator.AUTH_TYPE_GMAIL) ||
+                (isGmailHost(host) && GmailState.isApiState(password));
+    }
+
+    boolean isZohoApi() {
+        return (auth_type != null && auth_type == ServiceAuthenticator.AUTH_TYPE_ZOHO) ||
+                ZohoState.isApiState(password);
+    }
+
+    boolean isGraphApi() {
+        return (auth_type != null && auth_type == ServiceAuthenticator.AUTH_TYPE_GRAPH_API);
+    }
+
+    boolean isNativeRestApi() {
+        return (isGmailApi() || isZohoApi() || isGraphApi());
+    }
+
+    boolean supportsLegacyImapSearch() {
+        return (protocol == TYPE_IMAP && !isNativeRestApi());
+    }
+
+    boolean isGmail() {
+        return isGmailApi() || isGmailHost(host);
     }
 
     boolean isOutlook() {
@@ -194,7 +236,8 @@ public class EntityAccount extends EntityOrder implements Serializable {
     }
 
     static boolean isOutlook(String id) {
-        return ("office365".equals(id) || "office365pcke".equals(id) || "outlook".equals(id) || "outlookgraph".equals(id));
+        return ("office365".equals(id) || "office365pcke".equals(id) || "outlook".equals(id) ||
+                GraphOAuth.isProviderId(id));
     }
 
     boolean isYahooJp() {
@@ -206,7 +249,7 @@ public class EntityAccount extends EntityOrder implements Serializable {
     }
 
     boolean isZoho() {
-        return (host != null && host.toLowerCase(Locale.ROOT).startsWith("imap.zoho."));
+        return (!isZohoApi() && host != null && host.toLowerCase(Locale.ROOT).startsWith("imap.zoho."));
     }
 
     boolean isYahoo() {
@@ -257,6 +300,13 @@ public class EntityAccount extends EntityOrder implements Serializable {
     }
 
     String getProtocol() {
+        if (isGmailApi())
+            throw new IllegalStateException("Gmail API accounts do not use an IMAP or POP protocol");
+        if (isZohoApi())
+            throw new IllegalStateException("Zoho Mail API accounts do not use an IMAP or POP protocol");
+        if (isGraphApi())
+            throw new IllegalStateException("Microsoft Graph API accounts do not use an IMAP or POP protocol");
+
         switch (protocol) {
             case TYPE_IMAP:
                 if (isGmail())

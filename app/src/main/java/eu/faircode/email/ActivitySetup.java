@@ -411,6 +411,10 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
             return true;
 
         int itemId = item.getItemId();
+        if (ActivitySetupNavigationPolicy.shouldRouteToolbarUpToExit(itemId)) {
+            onExit();
+            return true;
+        }
         if (itemId == R.id.menu_close) {
             onMenuClose();
             return true;
@@ -687,7 +691,7 @@ public class ActivitySetup extends ActivityBase implements FragmentManager.OnBac
     }
 
     private void onGmail(Intent intent) {
-        FragmentGmail fragment = new FragmentGmail();
+        FragmentGmailApi fragment = new FragmentGmailApi();
         fragment.setArguments(intent.getExtras());
         FragmentTransaction fragmentTransaction = getSupportFragmentManager().beginTransaction();
         fragmentTransaction.replace(R.id.content_frame, fragment).addToBackStack("quick");

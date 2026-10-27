@@ -571,6 +571,12 @@ public class FragmentFolder extends FragmentBase {
 
                     EntityFolder folder = db.folder().getFolder(id);
 
+                    EntityAccount createAccount = (folder == null ? db.account().getAccount(aid) : null);
+                    if (createAccount != null && createAccount.isNativeRestApi()) {
+                        Log.i("Refused unsupported REST server-folder creation account=" + aid);
+                        return false;
+                    }
+
                     if (should) {
                         if (folder == null)
                             return !TextUtils.isEmpty(name);

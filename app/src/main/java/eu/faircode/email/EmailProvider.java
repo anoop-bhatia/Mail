@@ -22,6 +22,7 @@ package eu.faircode.email;
 import static android.system.OsConstants.ECONNREFUSED;
 
 import android.content.Context;
+import android.content.res.XmlResourceParser;
 import android.content.SharedPreferences;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -110,6 +111,8 @@ public class EmailProvider implements Parcelable {
     public Server pop;
     public OAuth oauth;
     public OAuth graph;
+    public OAuth legacyOauth;
+    public OAuth legacyGraph;
     public UserType user = UserType.EMAIL;
     public String username;
     public StringBuilder documentation; // html
@@ -119,6 +122,7 @@ public class EmailProvider implements Parcelable {
     enum UserType {LOCAL, EMAIL, VALUE}
 
     private static List<EmailProvider> imported;
+    private static volatile Map<String, EmailProvider> legacyMicrosoftOAuth;
 
     private static final int SCAN_TIMEOUT = 10 * 1000; // milliseconds
     private static final int ISPDB_TIMEOUT = 10 * 1000; // milliseconds
@@ -142,7 +146,7 @@ public class EmailProvider implements Parcelable {
             "atomicmail.io"
     ));
 
-    private EmailProvider() {
+    EmailProvider() {
     }
 
     EmailProvider(String name) {
@@ -211,6 +215,17 @@ public class EmailProvider implements Parcelable {
 
         if (imported != null)
             result.addAll(imported);
+
+        result.add(ZohoOAuth.createProvider());
+
+        Map<String, EmailProvider> legacy = getLegacyMicrosoftOAuth(context);
+        for (EmailProvider provider : result) {
+            EmailProvider compatibility = legacy.get(provider.id);
+            if (compatibility != null) {
+                provider.legacyOauth = compatibility.oauth;
+                provider.legacyGraph = compatibility.graph;
+            }
+        }
 
         final Collator collator = Collator.getInstance(Locale.getDefault());
         collator.setStrength(Collator.SECONDARY); // Case insensitive, process accents etc
@@ -374,6 +389,30 @@ public class EmailProvider implements Parcelable {
         return (value == null ? defaultValue : Integer.parseInt(value));
     }
 
+    private static Map<String, EmailProvider> getLegacyMicrosoftOAuth(Context context) {
+        if (legacyMicrosoftOAuth == null)
+            synchronized (EmailProvider.class) {
+                if (legacyMicrosoftOAuth == null) {
+                    Map<String, EmailProvider> profiles = new LinkedHashMap<>();
+                    XmlResourceParser parser = null;
+                    try {
+                        parser = context.getResources().getXml(R.xml.providers_microsoft_oauth_legacy);
+                        List<EmailProvider> parsed = parseProfiles(parser);
+                        if (parsed != null)
+                            for (EmailProvider provider : parsed)
+                                profiles.put(provider.id, provider);
+                    } catch (Throwable ex) {
+                        Log.e(ex);
+                    } finally {
+                        if (parser != null)
+                            parser.close();
+                    }
+                    legacyMicrosoftOAuth = profiles;
+                }
+            }
+        return legacyMicrosoftOAuth;
+    }
+
     static EmailProvider getProvider(Context context, String id) throws FileNotFoundException {
         if (id != null)
             for (EmailProvider provider : loadProfiles(context))
@@ -428,6 +467,9 @@ public class EmailProvider implements Parcelable {
 
         if (TextUtils.isEmpty(domain))
             throw new UnknownHostException(context.getString(R.string.title_setup_no_settings, domain));
+
+        if (EntityAccount.isGmailDomain(domain))
+            throw new IllegalArgumentException(context.getString(R.string.title_setup_gmail_api_only));
 
         if (PROPRIETARY.contains(domain))
             throw new IllegalArgumentException(context.getString(R.string.title_no_standard));

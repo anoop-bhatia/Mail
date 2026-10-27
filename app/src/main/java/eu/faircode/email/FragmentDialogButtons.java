@@ -34,12 +34,23 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.preference.PreferenceManager;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 public class FragmentDialogButtons extends FragmentDialogBase {
     @NonNull
     @Override
     public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
         final Context context = getContext();
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        MessageButtonCapabilities.Context capabilities = null;
+        Bundle args = getArguments();
+        if (args != null)
+            capabilities = (MessageButtonCapabilities.Context) args.getSerializable("capabilities");
 
         final View dview = LayoutInflater.from(context).inflate(R.layout.dialog_buttons, null);
         final CheckBox cbSeen = dview.findViewById(R.id.cbSeen);
@@ -70,6 +81,12 @@ public class FragmentDialogButtons extends FragmentDialogBase {
         final CheckBox cbRaw = dview.findViewById(R.id.cbRaw);
         final CheckBox cbUnsubscribe = dview.findViewById(R.id.cbUnsubscribe);
         final CheckBox cbAnswer = dview.findViewById(R.id.cbAnswer);
+        final List<CheckBox> buttonCheckboxes = Arrays.asList(
+                cbJunk, cbTrash, cbArchive, cbMove, cbCopy, cbKeywords, cbLabels,
+                cbNotes, cbSeen, cbHide, cbImportance, cbTranslate, cbTts,
+                cbSummarize, cbFullScreen, cbForceLight, cbSearch, cbSearchText,
+                cbEvent, cbShare, cbPin, cbPrint, cbHeaders, cbHtml, cbRaw,
+                cbUnsubscribe, cbRule, cbAnswer);
 
         cbTranslate.setVisibility(DeepL.isAvailable(context) ? View.VISIBLE : View.GONE);
         cbSummarize.setVisibility(AI.isAvailable(context) ? View.VISIBLE : View.GONE);
@@ -80,6 +97,10 @@ public class FragmentDialogButtons extends FragmentDialogBase {
         cbImportance.setChecked(prefs.getBoolean("button_importance", false));
         cbJunk.setChecked(prefs.getBoolean("button_junk", true));
         cbTrash.setChecked(prefs.getBoolean("button_trash", true));
+        if (capabilities != null && capabilities.provider == MessageButtonCapabilities.Provider.GMAIL_API &&
+                capabilities.hasGmailId && capabilities.sourceWritable && !capabilities.gmailDraft &&
+                capabilities.inTrash)
+            cbTrash.setText(R.string.title_delete_permanently);
         cbArchive.setChecked(prefs.getBoolean("button_archive", true));
         cbMove.setChecked(prefs.getBoolean("button_move", true));
         cbCopy.setChecked(prefs.getBoolean("button_copy", false));
@@ -111,40 +132,28 @@ public class FragmentDialogButtons extends FragmentDialogBase {
         boolean swipe_reply = prefs.getBoolean("swipe_reply", false);
         cbAnswer.setVisibility((!expand_all && expand_one) || !threading || swipe_reply ? View.VISIBLE : View.GONE);
 
+        for (int i = 0; i < MessageButtonConfiguration.PREFERENCES.size(); i++)
+            setAvailable(buttonCheckboxes.get(i),
+                    MessageButtonConfiguration.PREFERENCES.get(i), capabilities);
+
         return new AlertDialog.Builder(getContext())
                 .setView(dview)
                 .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         SharedPreferences.Editor editor = prefs.edit();
-                        editor.putBoolean("button_seen", cbSeen.isChecked());
-                        editor.putBoolean("button_hide", cbHide.isChecked());
-                        editor.putBoolean("button_importance", cbImportance.isChecked());
-                        editor.putBoolean("button_junk", cbJunk.isChecked());
-                        editor.putBoolean("button_trash", cbTrash.isChecked());
-                        editor.putBoolean("button_archive", cbArchive.isChecked());
-                        editor.putBoolean("button_move", cbMove.isChecked());
-                        editor.putBoolean("button_copy", cbCopy.isChecked());
-                        editor.putBoolean("button_notes", cbNotes.isChecked());
-                        editor.putBoolean("button_rule", cbRule.isChecked());
-                        editor.putBoolean("button_keywords", cbKeywords.isChecked());
-                        editor.putBoolean("button_labels", cbLabels.isChecked());
-                        editor.putBoolean("button_search", cbSearch.isChecked());
-                        editor.putBoolean("button_search_text", cbSearchText.isChecked());
-                        editor.putBoolean("button_translate", cbTranslate.isChecked());
-                        editor.putBoolean("button_tts", cbTts.isChecked());
-                        editor.putBoolean("button_summarize", cbSummarize.isChecked());
-                        editor.putBoolean("button_full_screen", cbFullScreen.isChecked());
-                        editor.putBoolean("button_force_light", cbForceLight.isChecked());
-                        editor.putBoolean("button_event", cbEvent.isChecked());
-                        editor.putBoolean("button_share", cbShare.isChecked());
-                        editor.putBoolean("button_pin", cbPin.isChecked());
-                        editor.putBoolean("button_print", cbPrint.isChecked());
-                        editor.putBoolean("button_headers", cbHeaders.isChecked());
-                        editor.putBoolean("button_html", cbHtml.isChecked());
-                        editor.putBoolean("button_raw", cbRaw.isChecked());
-                        editor.putBoolean("button_unsubscribe", cbUnsubscribe.isChecked());
-                        editor.putBoolean("button_answer", cbAnswer.isChecked());
+                        Map<String, Boolean> selections = new HashMap<>();
+                        Set<String> visible = new HashSet<>();
+                        for (int i = 0; i < MessageButtonConfiguration.PREFERENCES.size(); i++) {
+                            String preference = MessageButtonConfiguration.PREFERENCES.get(i);
+                            CheckBox checkbox = buttonCheckboxes.get(i);
+                            selections.put(preference, checkbox.isChecked());
+                            if (checkbox.getVisibility() == View.VISIBLE)
+                                visible.add(preference);
+                        }
+                        for (Map.Entry<String, Boolean> entry : MessageButtonConfiguration
+                                .visibleSelections(selections, visible).entrySet())
+                            editor.putBoolean(entry.getKey(), entry.getValue());
                         editor.apply();
                         sendResult(Activity.RESULT_OK);
                     }
@@ -157,4 +166,11 @@ public class FragmentDialogButtons extends FragmentDialogBase {
                 })
                 .create();
     }
+
+    private static void setAvailable(CheckBox checkbox, String preference,
+                                     MessageButtonCapabilities.Context capabilities) {
+        if (!MessageButtonCapabilities.isAvailable(preference, capabilities))
+            checkbox.setVisibility(View.GONE);
+    }
+
 }

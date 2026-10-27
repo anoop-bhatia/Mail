@@ -221,8 +221,10 @@ public class FairEmailBackupAgent extends BackupAgent {
                                 if (primary != null)
                                     account.primary = false;
 
-                                if (account.auth_type == ServiceAuthenticator.AUTH_TYPE_GMAIL)
+                                if (account.isGmailApi()) {
+                                    account.auth_type = ServiceAuthenticator.AUTH_TYPE_GMAIL;
                                     account.synchronize = false;
+                                }
 
                                 account.id = db.account().insertAccount(account);
 

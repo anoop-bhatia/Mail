@@ -19,7 +19,6 @@ package eu.faircode.email;
     Copyright 2018-2026 by Marcel Bokhorst (M66B)
 */
 
-import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_GMAIL;
 import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_OAUTH;
 import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_PASSWORD;
 
@@ -141,18 +140,18 @@ public class AdapterIdentity extends RecyclerView.Adapter<AdapterIdentity.ViewHo
             ivSync.setImageResource(identity.synchronize ? R.drawable.twotone_sync_24 : R.drawable.twotone_sync_disabled_24);
             ivSync.setContentDescription(context.getString(identity.synchronize ? R.string.title_legend_synchronize_on : R.string.title_legend_synchronize_off));
 
-            ivOAuth.setVisibility(identity.auth_type == AUTH_TYPE_PASSWORD ? View.GONE : View.VISIBLE);
+            ivOAuth.setVisibility(identity.auth_type == AUTH_TYPE_PASSWORD && !identity.isGmailApi() &&
+                    !identity.isZohoApi() && !identity.isGraphApi()
+                    ? View.GONE : View.VISIBLE);
             ivOAuth.setImageResource(
-                    identity.auth_type == AUTH_TYPE_GMAIL || identity.auth_type == AUTH_TYPE_OAUTH
+                    identity.isNativeRestApi() || identity.auth_type == AUTH_TYPE_OAUTH
                             ? R.drawable.twotone_security_24 : R.drawable.twotone_hub_24);
             ivPrimary.setVisibility(identity.primary ? View.VISIBLE : View.GONE);
             ivGroup.setVisibility(identity.self ? View.GONE : View.VISIBLE);
             tvName.setText(identity.getDisplayName());
 
-            StringBuilder user = new StringBuilder(identity.email);
-            if (identity.provider != null && (BuildConfig.DEBUG || debug))
-                user.append(" (").append(identity.provider).append(')');
-            tvUser.setText(user);
+            tvUser.setText(IdentityPresentation.formatEmail(identity.email, identity.provider,
+                    BuildConfig.DEBUG || debug, identity.isNativeRestApi()));
 
             if ("connected".equals(identity.state)) {
                 ivState.setImageResource(R.drawable.twotone_cloud_done_24);
@@ -166,7 +165,14 @@ public class AdapterIdentity extends RecyclerView.Adapter<AdapterIdentity.ViewHo
             }
             ivState.setVisibility(identity.synchronize ? View.VISIBLE : View.INVISIBLE);
 
-            tvHost.setText(String.format("%s:%d/%s",
+            boolean nativeApi = identity.isNativeRestApi();
+            String apiLabel = (identity.isGraphApi()
+                    ? context.getString(R.string.title_account_graph_api)
+                    : identity.isZohoApi()
+                    ? context.getString(R.string.title_account_zoho_api)
+                    : nativeApi ? context.getString(R.string.title_account_gmail_api) : null);
+            tvHost.setText(GmailApiEndpointLabel.format(nativeApi,
+                    apiLabel,
                     identity.host,
                     identity.port,
                     EmailService.getEncryptionName(identity.encryption)));

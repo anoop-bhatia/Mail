@@ -285,7 +285,7 @@ public class FragmentSetup extends FragmentBase implements SharedPreferences.OnS
         tvPrivacy.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Helper.view(v.getContext(), Helper.getPrivacyUri(v.getContext()), false);
+                Helper.view(v.getContext(), Uri.parse(Helper.FAQ_BASE_URI), false);
             }
         });
 
@@ -336,36 +336,57 @@ public class FragmentSetup extends FragmentBase implements SharedPreferences.OnS
 
                 int order = 1;
 
-                // OAuth
+                for (SetupOAuthProviderFilter.ApiChoice choice : SetupOAuthProviderFilter.getApiOrder())
+                    switch (choice) {
+                        case GMAIL: {
+                            Resources res = context.getResources();
+                            MenuItem item = menu.add(SetupOAuthProviderFilter.GROUP_API,
+                                    R.string.title_setup_gmail, order++, R.string.title_setup_gmail);
+                            int resid = res.getIdentifier("provider_gmail", "drawable", context.getPackageName());
+                            if (resid != 0)
+                                item.setIcon(resid);
+                            break;
+                        }
+                        case ZOHO:
+                            menu.add(SetupOAuthProviderFilter.GROUP_API,
+                                    R.string.title_setup_zoho_api, order++, R.string.title_setup_zoho_api)
+                                    .setIntent(new Intent(ActivitySetup.ACTION_QUICK_OAUTH)
+                                            .putExtra("id", ZohoOAuth.PROVIDER_ID)
+                                            .putExtra("name", "Zoho Mail API")
+                                            .putExtra("privacy", ZohoOAuth.PRIVACY_URI)
+                                            .putExtra("askAccount", true)
+                                            .putExtra("update", true));
+                            break;
+                        case GRAPH: {
+                            Resources res = context.getResources();
+                            MenuItem graphMail = menu.add(SetupOAuthProviderFilter.GROUP_API,
+                                    R.string.title_setup_graph_api, order++, R.string.title_setup_graph_api)
+                                    .setIntent(new Intent(ActivitySetup.ACTION_QUICK_OAUTH)
+                                            .putExtra("id", GraphOAuth.LEGACY_PROVIDER_ID)
+                                            .putExtra("name", context.getString(R.string.title_setup_graph_api))
+                                            .putExtra("privacy", GraphOAuth.PRIVACY_URI)
+                                            .putExtra("askAccount", true)
+                                            .putExtra("update", true)
+                                            .putExtra("graphMailApi", true));
+                            int graphIcon = res.getIdentifier("provider_outlookgraph", "drawable", context.getPackageName());
+                            if (graphIcon != 0)
+                                graphMail.setIcon(graphIcon);
+                            break;
+                        }
+                    }
+
+                // The group boundary inserts a divider after the three native API choices.
                 order = getMenuItems(menu, context, providers, order, false, debug);
-
-                menu.add(Menu.NONE, R.string.title_setup_other, order++, R.string.title_setup_other)
+                menu.add(SetupOAuthProviderFilter.GROUP_PRIMARY,
+                        R.string.title_setup_other, order++, R.string.title_setup_other)
                         .setIcon(R.drawable.twotone_auto_fix_high_24);
-
-                // Gmail / account manager
-                {
-                    Resources res = context.getResources();
-                    String pkg = context.getPackageName();
-
-                    String gmail = getString(R.string.title_setup_android, getString(R.string.title_setup_gmail));
-                    SpannableString ss = new SpannableString(gmail);
-                    ss.setSpan(new RelativeSizeSpan(HtmlHelper.FONT_SMALL), 0, ss.length(), 0);
-                    MenuItem item = menu.add(Menu.FIRST, R.string.title_setup_gmail, order++, ss);
-                    int resid = res.getIdentifier("provider_gmail", "drawable", pkg);
-                    if (resid != 0)
-                        item.setIcon(resid);
-                }
-
                 order = getMenuItems(menu, context, providers, order, true, debug);
-
                 SpannableString imap = new SpannableString(getString(R.string.title_setup_imap));
                 imap.setSpan(new RelativeSizeSpan(HtmlHelper.FONT_SMALL), 0, imap.length(), 0);
-                menu.add(Menu.FIRST, R.string.title_setup_imap, order++, imap);
-
+                menu.add(SetupOAuthProviderFilter.GROUP_ALTERNATE, R.string.title_setup_imap, order++, imap);
                 SpannableString pop3 = new SpannableString(getString(R.string.title_setup_pop3));
                 pop3.setSpan(new RelativeSizeSpan(HtmlHelper.FONT_SMALL), 0, pop3.length(), 0);
-                menu.add(Menu.FIRST, R.string.title_setup_pop3, order++, pop3);
-
+                menu.add(SetupOAuthProviderFilter.GROUP_ALTERNATE, R.string.title_setup_pop3, order++, pop3);
                 popupMenu.insertIcons(context);
 
                 MenuCompat.setGroupDividerEnabled(menu, true);
@@ -452,16 +473,19 @@ public class FragmentSetup extends FragmentBase implements SharedPreferences.OnS
                 String pkg = context.getPackageName();
 
                 for (EmailProvider provider : providers)
-                    if (provider.oauth != null &&
-                            (provider.oauth.enabled || (provider.debug && debug)) &&
-                            !TextUtils.isEmpty(provider.oauth.clientId) &&
-                            provider.alt == alt) {
+                    if (SetupOAuthProviderFilter.isEligible(
+                            provider.id,
+                            provider.oauth != null,
+                            (provider.oauth != null && provider.oauth.enabled),
+                            provider.debug, debug,
+                            (provider.oauth == null ? null : provider.oauth.clientId),
+                            provider.alt, alt)) {
                         String title = getString(R.string.title_setup_oauth, provider.description);
                         SpannableString ss = new SpannableString(title);
                         if (provider.alt)
                             ss.setSpan(new RelativeSizeSpan(HtmlHelper.FONT_SMALL), 0, ss.length(), 0);
                         MenuItem item = menu
-                                .add(alt ? Menu.FIRST : Menu.NONE, -1, order++, ss)
+                                .add(SetupOAuthProviderFilter.getOAuthGroup(alt), -1, order++, ss)
                                 .setIntent(new Intent(ActivitySetup.ACTION_QUICK_OAUTH)
                                         .putExtra("id", provider.id)
                                         .putExtra("name", provider.description)
@@ -984,7 +1008,8 @@ public class FragmentSetup extends FragmentBase implements SharedPreferences.OnS
                             break;
                         }
 
-                grpGraphContacts.setVisibility(outlook ? View.VISIBLE : View.GONE);
+                // The old Contacts OAuth registration is not available for new sign-ins.
+                grpGraphContacts.setVisibility(View.GONE);
 
                 prefs.edit().putBoolean("has_accounts", done).apply();
             }
@@ -1360,21 +1385,21 @@ public class FragmentSetup extends FragmentBase implements SharedPreferences.OnS
             AuthorizationService authService = new AuthorizationService(context, appAuthConfig);
 
             AuthorizationServiceConfiguration serviceConfig = new AuthorizationServiceConfiguration(
-                    Uri.parse(provider.graph.authorizationEndpoint),
-                    Uri.parse(provider.graph.tokenEndpoint));
+                    Uri.parse(provider.legacyGraph.authorizationEndpoint),
+                    Uri.parse(provider.legacyGraph.tokenEndpoint));
 
             AuthorizationRequest.Builder authRequestBuilder =
                     new AuthorizationRequest.Builder(
                             serviceConfig,
-                            provider.graph.clientId,
+                            provider.legacyGraph.clientId,
                             ResponseTypeValues.CODE,
-                            Uri.parse(provider.graph.redirectUri))
+                            Uri.parse(provider.legacyGraph.redirectUri))
                             .setScopes(GRAPH_SCOPE_READ_CONTACTS)
                             .setState(provider.id + ":" + account)
                             .setLoginHint(user);
 
-            if (!TextUtils.isEmpty(provider.graph.prompt))
-                authRequestBuilder.setPrompt(provider.graph.prompt);
+            if (!TextUtils.isEmpty(provider.legacyGraph.prompt))
+                authRequestBuilder.setPrompt(provider.legacyGraph.prompt);
 
             Intent authIntent = authService.getAuthorizationRequestIntent(authRequestBuilder.build());
             EntityLog.log(context, "Graph/contacts intent=" + authIntent);
@@ -1405,10 +1430,10 @@ public class FragmentSetup extends FragmentBase implements SharedPreferences.OnS
             AuthorizationService authService = new AuthorizationService(context);
 
             ClientAuthentication clientAuth;
-            if (provider.graph.clientSecret == null)
+            if (provider.legacyGraph.clientSecret == null)
                 clientAuth = NoClientAuthentication.INSTANCE;
             else
-                clientAuth = new ClientSecretPost(provider.graph.clientSecret);
+                clientAuth = new ClientSecretPost(provider.legacyGraph.clientSecret);
 
             TokenRequest.Builder builder = new TokenRequest.Builder(
                     auth.request.configuration,
@@ -1419,7 +1444,7 @@ public class FragmentSetup extends FragmentBase implements SharedPreferences.OnS
                     .setAuthorizationCode(auth.authorizationCode)
                     .setNonce(auth.request.nonce);
 
-            if (provider.graph.tokenScopes)
+            if (provider.legacyGraph.tokenScopes)
                 builder.setScope(GRAPH_SCOPE_READ_CONTACTS);
 
             authService.performTokenRequest(

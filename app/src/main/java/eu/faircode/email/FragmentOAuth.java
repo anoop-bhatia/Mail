@@ -104,6 +104,8 @@ public class FragmentOAuth extends FragmentBase {
     private String privacy;
     private boolean askAccount;
     private boolean askTenant;
+    private long zohoAccountId = -1;
+    private boolean graphMailApi;
 
     private String personal;
     private String address;
@@ -134,6 +136,9 @@ public class FragmentOAuth extends FragmentBase {
     private TextView tvGmailLoginMax;
     private TextView tvOutlookHint;
     private TextView tvOutlookPasskeyHint;
+    private EditText etZohoClientId;
+    private EditText etZohoClientSecret;
+    private EditText etZohoRedirectUri;
 
     private TextView tvError;
     private TextView tvOfficeAuthHint;
@@ -141,6 +146,7 @@ public class FragmentOAuth extends FragmentBase {
     private Button btnHelp;
 
     private Group grpTenant;
+    private Group grpZoho;
     private Group grpError;
 
     private static final String FAIREMAIL_RANDOM = "fairemail.random";
@@ -158,6 +164,8 @@ public class FragmentOAuth extends FragmentBase {
         privacy = args.getString("privacy");
         askAccount = args.getBoolean("askAccount", false);
         askTenant = args.getBoolean("askTenant", false);
+        zohoAccountId = args.getLong("zohoAccount", -1);
+        graphMailApi = args.getBoolean("graphMailApi", false);
 
         personal = args.getString("personal");
         address = args.getString("address");
@@ -184,6 +192,9 @@ public class FragmentOAuth extends FragmentBase {
         etName = view.findViewById(R.id.etName);
         etEmail = view.findViewById(R.id.etEmail);
         etTenant = view.findViewById(R.id.etTenant);
+        etZohoClientId = view.findViewById(R.id.etZohoClientId);
+        etZohoClientSecret = view.findViewById(R.id.etZohoClientSecret);
+        etZohoRedirectUri = view.findViewById(R.id.etZohoRedirectUri);
         cbInboundOnly = view.findViewById(R.id.cbInboundOnly);
         cbPop = view.findViewById(R.id.cbPop);
         cbRecent = view.findViewById(R.id.cbRecent);
@@ -205,6 +216,7 @@ public class FragmentOAuth extends FragmentBase {
         btnHelp = view.findViewById(R.id.btnHelp);
 
         grpTenant = view.findViewById(R.id.grpTenant);
+        grpZoho = view.findViewById(R.id.grpZoho);
         grpError = view.findViewById(R.id.grpError);
 
         // Wire controls
@@ -222,10 +234,12 @@ public class FragmentOAuth extends FragmentBase {
 
         tvPrivacy.setVisibility(TextUtils.isEmpty(privacy) ? View.GONE : View.VISIBLE);
         tvPrivacyApp.setPaintFlags(tvPrivacyApp.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
+        String appPrivacyUri = (graphMailApi || ZohoOAuth.isProviderId(id)
+                ? Helper.FAQ_BASE_URI : Helper.PRIVACY_URI);
         tvPrivacyApp.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Helper.view(v.getContext(), Uri.parse(Helper.PRIVACY_URI), false);
+                Helper.view(v.getContext(), Uri.parse(appPrivacyUri), false);
             }
         });
 
@@ -296,7 +310,7 @@ public class FragmentOAuth extends FragmentBase {
         btnOAuth.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                onAuthorize(false);
+                onAuthorize(graphMailApi);
             }
         });
 
@@ -320,32 +334,77 @@ public class FragmentOAuth extends FragmentBase {
         });
 
         boolean isOutlook = ("office365".equals(id) || "office365pcke".equals(id) || "outlookgraph".equals(id) || "outlook".equals(id));
+        boolean zoho = ZohoOAuth.isProviderId(id);
 
         // Initialize
-        tvTitle.setText(getString(R.string.title_setup_oauth_rationale, name));
+        int rationale = NativeApiSetupCopy.getRationaleResource(id, graphMailApi);
+        if (rationale != 0)
+            tvTitle.setText(rationale);
+        else
+            tvTitle.setText(getString(R.string.title_setup_oauth_rationale, name));
         etName.setVisibility(askAccount ? View.VISIBLE : View.GONE);
         etEmail.setVisibility(askAccount ? View.VISIBLE : View.GONE);
         grpTenant.setVisibility(askTenant ? View.VISIBLE : View.GONE);
-        cbPop.setVisibility(pop ? View.VISIBLE : View.GONE);
+        grpZoho.setVisibility(zoho ? View.VISIBLE : View.GONE);
+        cbInboundOnly.setVisibility(graphMailApi ? View.GONE : View.VISIBLE);
+        cbPop.setVisibility(pop && !graphMailApi ? View.VISIBLE : View.GONE);
         cbRecent.setVisibility(View.GONE);
         pbOAuth.setVisibility(View.GONE);
         tvConfiguring.setVisibility(View.GONE);
         tvGmailHint.setVisibility("gmail".equals(id) ? View.VISIBLE : View.GONE);
         tvGmailLoginHint.setVisibility("gmail".equals(id) ? View.VISIBLE : View.GONE);
         tvGmailLoginMax.setVisibility("gmail".equals(id) ? View.VISIBLE : View.GONE);
-        tvOutlookHint.setVisibility("outlookgraph".equals(id) ? View.VISIBLE : View.GONE);
-        tvOutlookPasskeyHint.setVisibility(isOutlook ? View.VISIBLE : View.GONE);
+        tvOutlookHint.setVisibility("outlookgraph".equals(id) && !graphMailApi ? View.VISIBLE : View.GONE);
+        tvOutlookPasskeyHint.setVisibility(isOutlook && !graphMailApi ? View.VISIBLE : View.GONE);
         hideError();
 
         etName.setText(personal);
         etEmail.setText(address);
         etTenant.setText(null);
+        etZohoClientId.setText(null);
+        etZohoClientSecret.setText(null);
+        etZohoRedirectUri.setText(ZohoOAuth.DEFAULT_REDIRECT_URI);
         cbInboundOnly.setChecked(false);
         cbPop.setChecked(false);
         cbRecent.setChecked(false);
         cbUpdate.setChecked(update);
 
+        if (zoho && zohoAccountId > 0)
+            loadZohoAccountSettings(zohoAccountId);
+
         return view;
+    }
+
+    private void loadZohoAccountSettings(long accountId) {
+        Bundle args = new Bundle();
+        args.putLong("account", accountId);
+        btnOAuth.setEnabled(false);
+        new SimpleTask<ZohoState>() {
+            @Override
+            protected ZohoState onExecute(Context context, Bundle args) throws Throwable {
+                EntityAccount account = DB.getInstance(context).account().getAccount(args.getLong("account"));
+                if (account == null || !account.isZohoApi())
+                    throw new IllegalArgumentException("Zoho account credentials are unavailable");
+                return ZohoState.jsonDeserialize(account.password);
+            }
+
+            @Override
+            protected void onExecuted(Bundle args, ZohoState state) {
+                if (state.clientId != null)
+                    etZohoClientId.setText(state.clientId);
+                if (state.clientSecret != null)
+                    etZohoClientSecret.setText(state.clientSecret);
+                if (state.redirectUri != null)
+                    etZohoRedirectUri.setText(state.redirectUri);
+                btnOAuth.setEnabled(true);
+            }
+
+            @Override
+            protected void onException(Bundle args, Throwable ex) {
+                btnOAuth.setEnabled(true);
+                showError(ex);
+            }
+        }.execute(this, args, "setup:zoho-account-settings");
     }
 
     @Override
@@ -372,8 +431,12 @@ public class FragmentOAuth extends FragmentBase {
 
     private void onAuthorize(boolean graph) {
         try {
+            if (graphMailApi)
+                graph = true;
             if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
                 return;
+
+            final boolean zoho = (!graph && ZohoOAuth.isProviderId(id));
 
             if (askAccount) {
                 String name = etName.getText().toString().trim();
@@ -403,6 +466,13 @@ public class FragmentOAuth extends FragmentBase {
                     throw new IllegalArgumentException(getString(R.string.title_email_invalid, email));
             }
 
+            final String zohoClientId = (zoho
+                    ? ZohoOAuth.validateClientId(etZohoClientId.getText().toString()) : null);
+            final String zohoClientSecret = (zoho
+                    ? ZohoOAuth.validateClientSecret(etZohoClientSecret.getText().toString()) : null);
+            final String zohoRedirectUri = (zoho
+                    ? ZohoOAuth.validateRedirectUri(etZohoRedirectUri.getText().toString()) : null);
+
             etName.clearFocus();
             etEmail.clearFocus();
             etTenant.clearFocus();
@@ -417,7 +487,8 @@ public class FragmentOAuth extends FragmentBase {
 
             final Context context = getContext();
             EmailProvider provider = EmailProvider.getProvider(context, id);
-            EmailProvider.OAuth oauth = (graph ? provider.graph : provider.oauth);
+            EmailProvider.OAuth oauth = getOAuthProfile(provider, graph);
+            final String[] requestedScopes = getRequestedScopes(oauth.scopes, graphMailApi && graph);
 
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
             boolean oauth_tabs = prefs.getBoolean("oauth_tabs", false);
@@ -447,8 +518,8 @@ public class FragmentOAuth extends FragmentBase {
                 authService = new AuthorizationService(context, appAuthConfig.build());
             }
 
-            String authorizationEndpoint = oauth.authorizationEndpoint;
-            String tokenEndpoint = oauth.tokenEndpoint;
+            String authorizationEndpoint = (zoho ? ZohoOAuth.getAuthorizationEndpoint() : oauth.authorizationEndpoint);
+            String tokenEndpoint = (zoho ? ZohoOAuth.getTokenEndpoint() : oauth.tokenEndpoint);
             String tenant = etTenant.getText().toString().trim();
 
             if (TextUtils.isEmpty(tenant))
@@ -470,12 +541,14 @@ public class FragmentOAuth extends FragmentBase {
             jauthstate.put(FAIREMAIL_EXPIRE, expire);
             prefs.edit().putString(key, jauthstate.toString()).apply();
 
-            Map<String, String> params = (oauth.parameters == null
-                    ? new LinkedHashMap<>()
-                    : oauth.parameters);
+            Map<String, String> params = new LinkedHashMap<>();
+            if (oauth.parameters != null)
+                params.putAll(oauth.parameters);
+            if (zoho)
+                params.put("access_type", "offline");
 
-            String clientId = oauth.clientId;
-            Uri redirectUri = Uri.parse(oauth.redirectUri);
+            String clientId = (zoho ? zohoClientId : oauth.clientId);
+            Uri redirectUri = Uri.parse(zoho ? zohoRedirectUri : oauth.redirectUri);
             if ("gmail".equals(id) && BuildConfig.DEBUG && false) {
                 clientId = "803253368361-hr8kelm53hqodj7c6brdjeb2ctn5jg3p.apps.googleusercontent.com";
                 redirectUri = Uri.parse("eu.faircode.email.debug:/");
@@ -488,7 +561,7 @@ public class FragmentOAuth extends FragmentBase {
                             clientId,
                             ResponseTypeValues.CODE,
                             redirectUri)
-                            .setScopes(oauth.scopes)
+                            .setScopes(zoho ? new String[]{ZohoOAuth.SCOPES} : requestedScopes)
                             .setState(provider.id + ":" + random + ":" + (graph ? ":graph" : ""))
                             .setAdditionalParameters(params);
 
@@ -506,7 +579,10 @@ public class FragmentOAuth extends FragmentBase {
 
             AuthorizationRequest authRequest = authRequestBuilder.build();
 
-            EntityLog.log(context, "OAuth request provider=" + provider.id + " uri=" + authRequest.toUri());
+            if (zoho)
+                EntityLog.log(context, "OAuth request provider=" + provider.id);
+            else
+                EntityLog.log(context, "OAuth request provider=" + provider.id + " uri=" + authRequest.toUri());
             Intent authIntent;
             try {
                 authIntent = authService.getAuthorizationRequestIntent(authRequest);
@@ -522,6 +598,36 @@ public class FragmentOAuth extends FragmentBase {
         } catch (Throwable ex) {
             showError(ex);
         }
+    }
+
+    static String[] getRequestedScopes(String[] configured, boolean graphMailApi) {
+        if (!graphMailApi)
+            return configured;
+        java.util.LinkedHashSet<String> scopes = new java.util.LinkedHashSet<>();
+        if (configured != null)
+            Collections.addAll(scopes, configured);
+        scopes.add("openid");
+        scopes.add("profile");
+        scopes.add("email");
+        scopes.add("https://graph.microsoft.com/Mail.ReadWrite");
+        return scopes.toArray(new String[0]);
+    }
+
+    private EmailProvider.OAuth getOAuthProfile(EmailProvider provider, boolean graph) {
+        if (graphMailApi)
+            return GraphOAuth.getProfile();
+        if (EntityAccount.isOutlook(provider.id)) {
+            EmailProvider.OAuth legacy = (graph ? provider.legacyGraph : provider.legacyOauth);
+            if (legacy != null)
+                return legacy;
+        }
+        return (graph ? provider.graph : provider.oauth);
+    }
+
+    private static EmailProvider.OAuth getGraphOAuthProfile(EmailProvider provider) {
+        if (EntityAccount.isOutlook(provider.id) && provider.legacyGraph != null)
+            return provider.legacyGraph;
+        return provider.graph;
     }
 
     private BrowserMatcher getBrowserMatcher(Context context, boolean tabs, EmailProvider provider) {
@@ -566,7 +672,8 @@ public class FragmentOAuth extends FragmentBase {
 
     private void onHandleOAuth(@NonNull Intent data) {
         try {
-            setEnabled(true);
+            if (!graphMailApi && !ZohoOAuth.isProviderId(id))
+                setEnabled(true);
 
             Log.breadcrumb("onHandleOAuth", "id", id);
 
@@ -583,10 +690,11 @@ public class FragmentOAuth extends FragmentBase {
             int returnedRandom = Integer.parseInt(auth.state.split(":")[1]);
             boolean graph = auth.state.endsWith(":graph");
             final EmailProvider provider = EmailProvider.getProvider(getContext(), id);
-            EmailProvider.OAuth oauth = (graph ? provider.graph : provider.oauth);
+            EmailProvider.OAuth oauth = getOAuthProfile(provider, graph);
+            EmailProvider.OAuth graphOauth = getGraphOAuthProfile(provider);
 
-            if (provider.graph != null &&
-                    provider.graph.enabled &&
+            if (graphOauth != null &&
+                    graphOauth.enabled &&
                     !graph)
                 setEnabled(false);
 
@@ -597,7 +705,7 @@ public class FragmentOAuth extends FragmentBase {
             int random = jauthstate.optInt(FAIREMAIL_RANDOM, -1);
             long expire = jauthstate.optLong(FAIREMAIL_EXPIRE, -1);
             jauthstate.remove(FAIREMAIL_RANDOM);
-            prefs.edit().remove("oauth." + auth.state).apply();
+            prefs.edit().remove(key).apply();
             long now = new Date().getTime();
 
             if (random != returnedRandom)
@@ -609,6 +717,31 @@ public class FragmentOAuth extends FragmentBase {
 
             Log.i("OAuth get token provider=" + provider.id + " state=" + auth.state);
             authState.update(auth, null);
+
+            if (ZohoOAuth.isProviderId(provider.id)) {
+                if (graph)
+                    throw new IllegalArgumentException("Zoho Mail does not use Microsoft Graph OAuth");
+                if (auth.request == null || TextUtils.isEmpty(auth.request.codeVerifier) ||
+                        auth.request.redirectUri == null || TextUtils.isEmpty(auth.request.clientId))
+                    throw new SecurityException("Zoho PKCE callback did not match the configured redirect");
+                String clientId = ZohoOAuth.validateClientId(auth.request.clientId);
+                String enteredClientId = ZohoOAuth.validateClientId(etZohoClientId.getText().toString());
+                if (!clientId.equals(enteredClientId))
+                    throw new SecurityException("Zoho Client ID changed while authorization was in progress");
+                String clientSecret = ZohoOAuth.validateClientSecret(etZohoClientSecret.getText().toString());
+                String requestRedirect = ZohoOAuth.validateRedirectUri(auth.request.redirectUri.toString());
+                String enteredRedirect = ZohoOAuth.validateRedirectUri(etZohoRedirectUri.getText().toString());
+                if (!requestRedirect.equals(enteredRedirect))
+                    throw new SecurityException("Zoho Redirect URI changed while authorization was in progress");
+                Map<String, String> callbackParameters = (auth.additionalParameters == null
+                        ? Collections.<String, String>emptyMap() : auth.additionalParameters);
+                String accountsServer = ZohoOAuth.getAccountsServer(callbackParameters);
+                onZohoAuthorized(auth.authorizationCode, auth.request.codeVerifier,
+                        requestRedirect, accountsServer, clientId, clientSecret,
+                        etName.getText().toString().trim(), etEmail.getText().toString().trim(),
+                        cbUpdate.isChecked());
+                return;
+            }
 
             AuthorizationService authService = new AuthorizationService(getContext());
 
@@ -629,7 +762,7 @@ public class FragmentOAuth extends FragmentBase {
                     .setNonce(auth.request.nonce);
 
             if (oauth.tokenScopes)
-                builder.setScope(TextUtils.join(" ", oauth.scopes));
+                builder.setScope(TextUtils.join(" ", getRequestedScopes(oauth.scopes, graphMailApi && graph)));
 
             TokenRequest request = builder.build();
 
@@ -654,7 +787,14 @@ public class FragmentOAuth extends FragmentBase {
 
                                 authState.update(access, null);
 
-                                if (provider.graph == null || !provider.graph.enabled)
+                                if (graphMailApi) {
+                                    if (!graph)
+                                        throw new SecurityException("Graph Mail API callback did not use the Microsoft Graph OAuth profile");
+                                    onGraphMailAuthorized(access.accessToken, access.idToken, authState);
+                                    return;
+                                }
+
+                                if (graphOauth == null || !graphOauth.enabled)
                                     onOAuthorized(
                                             new String[]{access.accessToken},
                                             new String[]{access.idToken},
@@ -682,6 +822,502 @@ public class FragmentOAuth extends FragmentBase {
         } catch (Throwable ex) {
             showError(ex);
         }
+    }
+
+    private void onZohoAuthorized(String code, String verifier, String redirectUri,
+                                  String accountsServer, String clientId, String clientSecret,
+                                  String requestedName,
+                                  String requestedAddress, boolean updateExisting) {
+        if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+            return;
+
+        Bundle args = new Bundle();
+        args.putString("requestedName", requestedName);
+        args.putString("requestedAddress", requestedAddress);
+        args.putBoolean("update", updateExisting);
+
+        new SimpleTask<Void>() {
+            @Override
+            protected void onPreExecute(Bundle args) {
+                setEnabled(false);
+                btnOAuth.setEnabled(false);
+                tvConfiguring.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            protected void onPostExecute(Bundle args) {
+                tvConfiguring.setVisibility(View.GONE);
+            }
+
+            @Override
+            protected Void onExecute(Context context, Bundle args) throws Throwable {
+                ZohoState state = ZohoOAuth.exchange(context, code, verifier, redirectUri,
+                        accountsServer, clientId, clientSecret);
+                ZohoApi discovery = new ZohoApi(state.accessToken, state.apiDomain);
+                discovery.setProtocolLogContext(context);
+                List<ZohoApi.Account> mailboxes = discovery.listAccounts();
+
+                String requested = args.getString("requestedAddress");
+                ZohoApi.Account mailbox = null;
+                if (!TextUtils.isEmpty(requested))
+                    for (ZohoApi.Account candidate : mailboxes)
+                        if (requested.trim().equalsIgnoreCase(candidate.email)) {
+                            mailbox = candidate;
+                            break;
+                        }
+                if (mailbox == null && TextUtils.isEmpty(requested) && !mailboxes.isEmpty())
+                    mailbox = mailboxes.get(0);
+                if (mailbox == null)
+                    throw new IllegalArgumentException("The selected address was not found in the authorized Zoho mailboxes");
+                if (!Helper.EMAIL_ADDRESS.matcher(mailbox.email).matches())
+                    throw new IllegalArgumentException("Zoho returned an invalid mailbox address");
+
+                String user = mailbox.email.trim();
+                String displayName = (TextUtils.isEmpty(args.getString("requestedName"))
+                        ? mailbox.displayName : args.getString("requestedName").trim());
+                if (TextUtils.isEmpty(displayName))
+                    displayName = user.substring(0, user.indexOf('@'));
+                state.accountId = mailbox.id;
+                state.email = mailbox.email;
+                state.displayName = displayName;
+                String password = state.jsonSerializeString();
+
+                ZohoApi api = new ZohoApi(state.accessToken, state.apiDomain, state.accountId);
+                api.setProtocolLogContext(context);
+                List<ZohoApi.Folder> remoteFolders = api.listFolders();
+                boolean hasInbox = false;
+                for (ZohoApi.Folder folder : remoteFolders)
+                    if (EntityFolder.INBOX.equals(getZohoFolderType(folder)))
+                        hasInbox = true;
+                if (!hasInbox)
+                    throw new IllegalArgumentException("Zoho did not return an Inbox folder");
+
+                DB db = DB.getInstance(context);
+                EntityAccount existing = null;
+                Long accountId;
+                try {
+                    db.beginTransaction();
+                    if (args.getBoolean("update"))
+                        for (EntityAccount candidate : db.account().getAccounts())
+                            if (candidate.isZohoApi() && user.equalsIgnoreCase(candidate.user)) {
+                                if (existing != null)
+                                    throw new IllegalArgumentException("More than one Zoho API account matches this address");
+                                existing = candidate;
+                            }
+
+                    EntityAccount account;
+                    if (existing == null) {
+                        EntityAccount primary = db.account().getPrimaryAccount();
+                        account = new EntityAccount();
+                        account.protocol = EntityAccount.TYPE_IMAP;
+                        account.host = "imap.zoho.com";
+                        account.encryption = EmailService.ENCRYPTION_SSL;
+                        account.port = 993;
+                        account.auth_type = ServiceAuthenticator.AUTH_TYPE_ZOHO;
+                        account.provider = ZohoOAuth.PROVIDER_ID;
+                        account.user = user;
+                        account.password = password;
+                        account.name = NativeApiAccountNaming.forNewAccount(
+                                ServiceAuthenticator.AUTH_TYPE_ZOHO, user);
+                        account.synchronize = true;
+                        account.primary = (primary == null);
+                        account.created = new Date().getTime();
+                        account.last_connected = account.created;
+                        account.id = db.account().insertAccount(account);
+                        accountId = account.id;
+                    } else {
+                        account = existing;
+                        account.protocol = EntityAccount.TYPE_IMAP;
+                        account.host = "imap.zoho.com";
+                        account.encryption = EmailService.ENCRYPTION_SSL;
+                        account.port = 993;
+                        account.auth_type = ServiceAuthenticator.AUTH_TYPE_ZOHO;
+                        account.provider = ZohoOAuth.PROVIDER_ID;
+                        account.user = user;
+                        account.password = password;
+                        account.synchronize = true;
+                        db.account().updateAccount(account);
+                        accountId = account.id;
+                    }
+                    boolean newAccount = (existing == null);
+                    args.putLong("account", accountId);
+
+                    EntityFolder inbox = null;
+                    for (ZohoApi.Folder remote : remoteFolders) {
+                        if (!remote.selectable)
+                            continue;
+                        String type = getZohoFolderType(remote);
+                        EntityFolder folder = db.folder().getFolderByZohoId(accountId, remote.id);
+                        if (folder == null)
+                            folder = db.folder().getFolderByName(accountId, remote.name);
+                        boolean created = (folder == null);
+                        if (created) {
+                            folder = new EntityFolder(remote.name, type);
+                            folder.account = accountId;
+                            folder.zoho_folder_id = remote.id;
+                            folder.synchronize = (newAccount
+                                    ? NativeApiFolderDefaults.shouldSynchronizeByDefault(type)
+                                    : true);
+                            NativeApiFolderDefaults.applyCreationDefaults(folder, newAccount, true);
+                            folder.selectable = true;
+                            folder.setSpecials(account);
+                            folder.id = db.folder().insertFolder(folder);
+                        } else {
+                            folder.zoho_folder_id = remote.id;
+                            folder.type = type;
+                            // Rediscovery/reauthorization updates remote metadata only;
+                            // preserve the user's existing folder sync selection.
+                            if (EntityFolder.INBOX.equals(type)) {
+                                folder.unified = true;
+                                folder.notify = true;
+                            }
+                            db.folder().updateFolder(folder);
+                        }
+                        if (EntityFolder.INBOX.equals(type))
+                            inbox = folder;
+                        if (newAccount
+                                ? NativeApiFolderDefaults.shouldQueueInitialSync(true, created, folder)
+                                : (created && Boolean.TRUE.equals(folder.synchronize)))
+                            EntityOperation.sync(context, folder.id, true);
+                    }
+                    if (inbox == null)
+                        throw new IllegalArgumentException("Zoho did not return a selectable Inbox folder");
+
+                    if (existing == null) {
+                        EntityIdentity identity = new EntityIdentity();
+                        identity.name = displayName;
+                        identity.email = user;
+                        identity.account = accountId;
+                        identity.host = "smtp.zoho.com";
+                        identity.encryption = EmailService.ENCRYPTION_SSL;
+                        identity.port = 465;
+                        identity.auth_type = ServiceAuthenticator.AUTH_TYPE_ZOHO;
+                        identity.provider = ZohoOAuth.PROVIDER_ID;
+                        identity.user = user;
+                        identity.password = password;
+                        identity.synchronize = true;
+                        identity.primary = true;
+                        db.identity().insertIdentity(identity);
+                        account.swipe_left = EntityMessage.SWIPE_ACTION_SEEN;
+                        account.swipe_right = EntityMessage.SWIPE_ACTION_SEEN;
+                        FragmentDialogSwipes.setDefaultFolderActions(context, account);
+                        db.account().updateAccount(account);
+                    } else {
+                        boolean foundIdentity = false;
+                        for (EntityIdentity identity : db.identity().getIdentities(accountId))
+                            if (identity.isZohoApi() || ZohoOAuth.isProviderId(identity.provider)) {
+                                identity.name = displayName;
+                                identity.email = user;
+                                identity.host = "smtp.zoho.com";
+                                identity.encryption = EmailService.ENCRYPTION_SSL;
+                                identity.port = 465;
+                                identity.auth_type = ServiceAuthenticator.AUTH_TYPE_ZOHO;
+                                identity.provider = ZohoOAuth.PROVIDER_ID;
+                                identity.user = user;
+                                identity.password = password;
+                                identity.synchronize = true;
+                                db.identity().updateIdentity(identity);
+                                foundIdentity = true;
+                            }
+                        if (!foundIdentity) {
+                            EntityIdentity identity = new EntityIdentity();
+                            identity.name = displayName;
+                            identity.email = user;
+                            identity.account = accountId;
+                            identity.host = "smtp.zoho.com";
+                            identity.encryption = EmailService.ENCRYPTION_SSL;
+                            identity.port = 465;
+                            identity.auth_type = ServiceAuthenticator.AUTH_TYPE_ZOHO;
+                            identity.provider = ZohoOAuth.PROVIDER_ID;
+                            identity.user = user;
+                            identity.password = password;
+                            identity.synchronize = true;
+                            identity.primary = true;
+                            db.identity().insertIdentity(identity);
+                        }
+                    }
+                    db.setTransactionSuccessful();
+                } finally {
+                    db.endTransaction();
+                }
+
+                args.putBoolean("updated", existing != null);
+                EntityLog.log(context, "Zoho Mail API account configured");
+                ServiceSynchronize.eval(context, "Zoho Mail API authorization");
+                FairEmailBackupAgent.dataChanged(context);
+                return null;
+            }
+
+            @Override
+            protected void onExecuted(Bundle args, Void data) {
+                pbOAuth.setVisibility(View.GONE);
+                if (args.getBoolean("updated")) {
+                    finish();
+                    ToastEx.makeText(getContext(), R.string.title_setup_oauth_updated, Toast.LENGTH_LONG).show();
+                } else {
+                    setAuthorizationIdle();
+                    FragmentDialogAccount fragment = new FragmentDialogAccount();
+                    fragment.setArguments(args);
+                    fragment.setTargetFragment(FragmentOAuth.this, ActivitySetup.REQUEST_DONE);
+                    fragment.show(getParentFragmentManager(), "zoho:review");
+                }
+            }
+
+            @Override
+            protected void onException(Bundle args, Throwable ex) {
+                showError(ex);
+            }
+        }.execute(this, args, "setup:zoho-mail-api");
+    }
+
+    private void onGraphMailAuthorized(String accessToken, String idToken, AuthState authState) {
+        if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
+            return;
+
+        Bundle args = new Bundle();
+        args.putString("requestedName", etName.getText().toString().trim());
+        args.putString("requestedAddress", etEmail.getText().toString().trim());
+        args.putBoolean("update", cbUpdate.isChecked());
+        args.putString("authState", authState.jsonSerializeString());
+
+        new SimpleTask<Void>() {
+            @Override
+            protected void onPreExecute(Bundle args) {
+                setEnabled(false);
+                btnOAuth.setEnabled(false);
+                tvConfiguring.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            protected void onPostExecute(Bundle args) {
+                tvConfiguring.setVisibility(View.GONE);
+            }
+
+            @Override
+            protected Void onExecute(Context context, Bundle args) throws Throwable {
+                String user = args.getString("requestedAddress");
+                if (user != null)
+                    user = user.trim();
+                if (TextUtils.isEmpty(user) || !Helper.EMAIL_ADDRESS.matcher(user).matches())
+                    throw new IllegalArgumentException("Enter a valid Microsoft mailbox address");
+                String displayName = args.getString("requestedName");
+                if (TextUtils.isEmpty(displayName))
+                    displayName = user.substring(0, user.indexOf('@'));
+
+                final String[] savedPassword = new String[]{args.getString("authState")};
+                ServiceAuthenticator authenticator = new ServiceAuthenticator(
+                        context, ServiceAuthenticator.AUTH_TYPE_GRAPH_API,
+                        GraphOAuth.LEGACY_PROVIDER_ID, user, savedPassword[0],
+                        new ServiceAuthenticator.IAuthenticated() {
+                            @Override
+                            public void onPasswordChanged(Context context, String newPassword) {
+                                savedPassword[0] = newPassword;
+                            }
+                        });
+                String token = authenticator.refreshToken(false);
+                GraphMailApi api = new GraphMailApi(context, token);
+                api.setTokenRefresher(rejected -> {
+                    try {
+                        return authenticator.refreshGraphTokenAfterUnauthorized();
+                    } catch (org.json.JSONException ex) {
+                        throw new java.io.IOException("Microsoft Graph mail token refresh failed", ex);
+                    }
+                });
+                List<GraphMailApi.MailFolder> remoteFolders = api.listFolders();
+                boolean hasInbox = false;
+                for (GraphMailApi.MailFolder remote : remoteFolders)
+                    if (EntityFolder.INBOX.equals(GraphFolderDefaults.getFolderType(remote.name)))
+                        hasInbox = true;
+                if (!hasInbox)
+                    throw new IllegalArgumentException("Microsoft Graph did not return a selectable Inbox folder");
+
+                String password = savedPassword[0];
+                DB db = DB.getInstance(context);
+                EntityAccount existing = null;
+                Long accountId;
+                try {
+                    db.beginTransaction();
+                    if (args.getBoolean("update"))
+                        for (EntityAccount candidate : db.account().getAccounts())
+                            if (candidate.isGraphApi() && user.equalsIgnoreCase(candidate.user)) {
+                                if (existing != null)
+                                    throw new IllegalArgumentException("More than one Graph API account matches this address");
+                                existing = candidate;
+                            }
+
+                    EntityAccount account;
+                    if (existing == null) {
+                        EntityAccount primary = db.account().getPrimaryAccount();
+                        account = new EntityAccount();
+                        account.protocol = EntityAccount.TYPE_IMAP;
+                        account.host = "graph.microsoft.com";
+                        account.encryption = EmailService.ENCRYPTION_SSL;
+                        account.port = 443;
+                        account.auth_type = ServiceAuthenticator.AUTH_TYPE_GRAPH_API;
+                        account.provider = GraphOAuth.PROVIDER_ID;
+                        account.user = user;
+                        account.password = password;
+                        account.name = NativeApiAccountNaming.forNewAccount(
+                                ServiceAuthenticator.AUTH_TYPE_GRAPH_API, user);
+                        account.synchronize = true;
+                        account.primary = (primary == null);
+                        account.created = new Date().getTime();
+                        account.last_connected = account.created;
+                        account.id = db.account().insertAccount(account);
+                        accountId = account.id;
+                    } else {
+                        account = existing;
+                        account.protocol = EntityAccount.TYPE_IMAP;
+                        account.host = "graph.microsoft.com";
+                        account.encryption = EmailService.ENCRYPTION_SSL;
+                        account.port = 443;
+                        account.auth_type = ServiceAuthenticator.AUTH_TYPE_GRAPH_API;
+                        account.provider = GraphOAuth.PROVIDER_ID;
+                        account.user = user;
+                        account.password = password;
+                        account.synchronize = true;
+                        db.account().updateAccount(account);
+                        accountId = account.id;
+                    }
+                    boolean newAccount = (existing == null);
+                    args.putLong("account", accountId);
+
+                    EntityFolder inbox = null;
+                    for (GraphMailApi.MailFolder remote : remoteFolders) {
+                        String type = GraphFolderDefaults.getFolderType(remote.name);
+                        EntityFolder folder = db.folder().getFolderByGraphId(accountId, remote.id);
+                        if (folder == null)
+                            folder = db.folder().getFolderByName(accountId, remote.name);
+                        boolean created = (folder == null);
+                        Long parentId = null;
+                        if (!TextUtils.isEmpty(remote.parentId) && !"msgfolderroot".equalsIgnoreCase(remote.parentId)) {
+                            EntityFolder parent = db.folder().getFolderByGraphId(accountId, remote.parentId);
+                            if (parent != null)
+                                parentId = parent.id;
+                        }
+                        if (created) {
+                            folder = new EntityFolder(remote.name, type);
+                            folder.account = accountId;
+                            folder.graph_folder_id = remote.id;
+                            folder.parent = parentId;
+                            folder.selectable = true;
+                            NativeApiFolderDefaults.applyCreationDefaults(folder, newAccount, true);
+                            folder.setSpecials(account);
+                            folder.id = db.folder().insertFolder(folder);
+                        } else {
+                            boolean remoteIdChanged = !TextUtils.equals(folder.graph_folder_id, remote.id);
+                            folder.name = remote.name;
+                            folder.type = type;
+                            folder.graph_folder_id = remote.id;
+                            folder.parent = parentId;
+                            folder.selectable = true;
+                            if (remoteIdChanged) {
+                                folder.graph_page_link = null;
+                                folder.graph_delta_link = null;
+                            }
+                            folder.setSpecials(account);
+                            db.folder().updateFolder(folder);
+                        }
+                        if (remote.totalItemCount != null)
+                            db.folder().setFolderTotal(folder.id, remote.totalItemCount);
+                        if (EntityFolder.INBOX.equals(type))
+                            inbox = folder;
+                        if (created && Boolean.TRUE.equals(folder.synchronize) &&
+                                !EntityFolder.INBOX.equals(type))
+                            EntityOperation.sync(context, folder.id, true);
+                    }
+                    if (inbox == null)
+                        throw new IllegalArgumentException("Microsoft Graph did not return a selectable Inbox folder");
+
+                    if (existing == null) {
+                        EntityIdentity identity = new EntityIdentity();
+                        identity.name = displayName;
+                        identity.email = user;
+                        identity.account = accountId;
+                        identity.host = "graph.microsoft.com";
+                        identity.encryption = EmailService.ENCRYPTION_SSL;
+                        identity.port = 443;
+                        identity.auth_type = ServiceAuthenticator.AUTH_TYPE_GRAPH_API;
+                        identity.provider = GraphOAuth.PROVIDER_ID;
+                        identity.user = user;
+                        identity.password = password;
+                        identity.synchronize = true;
+                        identity.primary = true;
+                        db.identity().insertIdentity(identity);
+                        account.swipe_left = EntityMessage.SWIPE_ACTION_SEEN;
+                        account.swipe_right = EntityMessage.SWIPE_ACTION_SEEN;
+                        FragmentDialogSwipes.setDefaultFolderActions(context, account);
+                        db.account().updateAccount(account);
+                    } else {
+                        boolean foundIdentity = false;
+                        for (EntityIdentity identity : db.identity().getIdentities(accountId))
+                            if (identity.isGraphApi()) {
+                                identity.name = displayName;
+                                identity.email = user;
+                                identity.host = "graph.microsoft.com";
+                                identity.encryption = EmailService.ENCRYPTION_SSL;
+                                identity.port = 443;
+                                identity.auth_type = ServiceAuthenticator.AUTH_TYPE_GRAPH_API;
+                                identity.provider = GraphOAuth.PROVIDER_ID;
+                                identity.user = user;
+                                identity.password = password;
+                                identity.synchronize = true;
+                                db.identity().updateIdentity(identity);
+                                foundIdentity = true;
+                            }
+                        if (!foundIdentity) {
+                            EntityIdentity identity = new EntityIdentity();
+                            identity.name = displayName;
+                            identity.email = user;
+                            identity.account = accountId;
+                            identity.host = "graph.microsoft.com";
+                            identity.encryption = EmailService.ENCRYPTION_SSL;
+                            identity.port = 443;
+                            identity.auth_type = ServiceAuthenticator.AUTH_TYPE_GRAPH_API;
+                            identity.provider = GraphOAuth.PROVIDER_ID;
+                            identity.user = user;
+                            identity.password = password;
+                            identity.synchronize = true;
+                            identity.primary = true;
+                            db.identity().insertIdentity(identity);
+                        }
+                    }
+                    db.setTransactionSuccessful();
+                } finally {
+                    db.endTransaction();
+                }
+
+                args.putBoolean("updated", existing != null);
+                EntityLog.log(context, "Microsoft Graph API account configured");
+                ServiceSynchronize.eval(context, "Microsoft Graph API authorization");
+                FairEmailBackupAgent.dataChanged(context);
+                return null;
+            }
+
+            @Override
+            protected void onExecuted(Bundle args, Void data) {
+                pbOAuth.setVisibility(View.GONE);
+                if (args.getBoolean("updated")) {
+                    finish();
+                    ToastEx.makeText(getContext(), R.string.title_setup_oauth_updated, Toast.LENGTH_LONG).show();
+                } else {
+                    setAuthorizationIdle();
+                    FragmentDialogAccount fragment = new FragmentDialogAccount();
+                    fragment.setArguments(args);
+                    fragment.setTargetFragment(FragmentOAuth.this, ActivitySetup.REQUEST_DONE);
+                    fragment.show(getParentFragmentManager(), "graph-mail:review");
+                }
+            }
+
+            @Override
+            protected void onException(Bundle args, Throwable ex) {
+                showError(ex);
+            }
+        }.execute(this, args, "setup:graph-mail-api");
+    }
+
+    private static String getZohoFolderType(ZohoApi.Folder folder) {
+        return ZohoFolderDefaults.getFolderType(folder.name);
     }
 
     private void onOAuthorized(String[] accessToken, String[] idToken, AuthState[] state) {
@@ -1121,19 +1757,31 @@ public class FragmentOAuth extends FragmentBase {
     }
 
     private void onHandleCancel() {
-        setEnabled(true);
-        btnOAuth.setEnabled(true);
-        pbOAuth.setVisibility(View.GONE);
+        setAuthorizationIdle();
+    }
+
+    static int[] getAuthorizationControlIds(String providerId, boolean graphMailApi) {
+        if (!graphMailApi && ZohoOAuth.isProviderId(providerId))
+            return new int[]{
+                    R.id.etName, R.id.etEmail, R.id.etTenant,
+                    R.id.cbInboundOnly, R.id.cbPop, R.id.cbRecent, R.id.cbUpdate,
+                    R.id.etZohoClientId, R.id.etZohoClientSecret, R.id.etZohoRedirectUri
+            };
+        return new int[]{
+                R.id.etName, R.id.etEmail, R.id.etTenant,
+                R.id.cbInboundOnly, R.id.cbPop, R.id.cbRecent, R.id.cbUpdate
+        };
     }
 
     private void setEnabled(boolean enabled) {
-        etName.setEnabled(enabled);
-        etEmail.setEnabled(enabled);
-        etTenant.setEnabled(enabled);
-        cbInboundOnly.setEnabled(enabled);
-        cbPop.setEnabled(enabled);
-        cbRecent.setEnabled(enabled);
-        cbUpdate.setEnabled(enabled);
+        for (int viewId : getAuthorizationControlIds(id, graphMailApi))
+            view.findViewById(viewId).setEnabled(enabled);
+    }
+
+    private void setAuthorizationIdle() {
+        setEnabled(true);
+        btnOAuth.setEnabled(true);
+        pbOAuth.setVisibility(View.GONE);
     }
 
     private void showError(Throwable ex) {
@@ -1149,7 +1797,7 @@ public class FragmentOAuth extends FragmentBase {
 
         grpError.setVisibility(View.VISIBLE);
 
-        if (EntityAccount.isOutlook(id)) {
+        if (EntityAccount.isOutlook(id) && !graphMailApi) {
             if (ex instanceof AuthenticationFailedException) {
                 if (ex.getMessage() != null &&
                         ex.getMessage().contains("535 5.7.3 Authentication unsuccessful"))
@@ -1189,9 +1837,7 @@ public class FragmentOAuth extends FragmentBase {
 
         btnHelp.setVisibility(provider != null && provider.link != null ? View.VISIBLE : View.GONE);
 
-        setEnabled(true);
-        btnOAuth.setEnabled(true);
-        pbOAuth.setVisibility(View.GONE);
+        setAuthorizationIdle();
 
         getMainHandler().post(new Runnable() {
             @Override

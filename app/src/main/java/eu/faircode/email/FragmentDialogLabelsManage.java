@@ -23,6 +23,7 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -37,47 +38,101 @@ public class FragmentDialogLabelsManage extends FragmentDialogBase {
     @Override
     public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
         final long id = getArguments().getLong("id");
+        final long[] ids = getArguments().getLongArray("ids");
         String self = getArguments().getString("self");
         String[] labels = getArguments().getStringArray("labels");
         final String[] folders = getArguments().getStringArray("folders");
+        String[] display = getArguments().getStringArray("display");
+        final String[] items = (display == null ? folders : display);
+        boolean gmailApi = getArguments().getBoolean("gmail_api");
 
-        List<String> l = new ArrayList<>();
-        if (self != null)
-            l.add(self);
-        if (labels != null)
-            l.addAll(Arrays.asList(labels));
-
-        boolean[] checked = new boolean[folders.length];
-        for (int i = 0; i < folders.length; i++)
-            if (l.contains(folders[i]))
-                checked[i] = true;
+        boolean[] checked;
+        if (gmailApi)
+            checked = GmailLabelControl.getChecked(folders, labels);
+        else {
+            List<String> selected = new ArrayList<>();
+            if (self != null)
+                selected.add(self);
+            if (labels != null)
+                selected.addAll(Arrays.asList(labels));
+            checked = new boolean[folders.length];
+            for (int i = 0; i < folders.length; i++)
+                checked[i] = selected.contains(folders[i]);
+        }
 
         return new AlertDialog.Builder(getContext())
                 .setIcon(R.drawable.twotone_label_24)
                 .setTitle(R.string.title_manage_labels)
-                .setMultiChoiceItems(folders, checked, new DialogInterface.OnMultiChoiceClickListener() {
+                .setMultiChoiceItems(items, checked, new DialogInterface.OnMultiChoiceClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which, boolean isChecked) {
+                        if (gmailApi)
+                            GmailMutationLog.event("picker_callback", EntityOperation.LABEL, "accepted");
                         Bundle args = new Bundle();
                         args.putLong("id", id);
+                        args.putLongArray("ids", ids);
                         args.putString("label", folders[which]);
                         args.putBoolean("set", isChecked);
+                        args.putBoolean("gmail_api", gmailApi);
+                        args.putLong("account", getArguments().getLong("account", -1L));
 
-                        new SimpleTask<Void>() {
+                        new SimpleTask<Integer>() {
                             @Override
-                            protected Void onExecute(Context context, Bundle args) {
+                            protected Integer onExecute(Context context, Bundle args) {
                                 long id = args.getLong("id");
+                                long[] ids = args.getLongArray("ids");
                                 String label = args.getString("label");
                                 boolean set = args.getBoolean("set");
+                                boolean gmailApi = args.getBoolean("gmail_api");
+                                long accountId = args.getLong("account", -1L);
 
                                 DB db = DB.getInstance(context);
-                                EntityMessage message = db.message().getMessage(id);
-                                if (message == null)
-                                    return null;
+                                if (ids == null)
+                                    ids = new long[]{id};
+                                int skipped = 0;
+                                for (long messageId : ids) {
+                                    EntityMessage message = db.message().getMessage(messageId);
+                                    if (gmailApi) {
+                                        EntityAccount account = (message == null
+                                                ? db.account().getAccount(accountId)
+                                                : db.account().getAccount(message.account));
+                                        EntityFolder source = (message == null ? null :
+                                                db.folder().getFolder(message.folder));
+                                        if (message == null || account == null || account.id != accountId ||
+                                                !GmailMailMutator.isWritableMessage(account, source, message) ||
+                                                !GmailMailMutator.isValidMessageLabelTarget(message)) {
+                                            GmailMutationLog.event("picker_callback", EntityOperation.LABEL,
+                                                    "source_missing");
+                                            if (message != null && account != null && account.isGmailApi()) {
+                                                db.message().setMessageUiHide(message.id, false);
+                                                db.message().setMessageUiBusy(message.id, null);
+                                            }
+                                            skipped++;
+                                        } else if (!GmailMailMutator.isManuallyApplicableLabel(db, account, label)) {
+                                            GmailMutationLog.event("picker_callback", EntityOperation.LABEL,
+                                                    "invalid_target");
+                                            skipped++;
+                                        } else if (!EntityOperation.queueGmailApiMutation(context, message,
+                                                EntityOperation.LABEL, label, set)) {
+                                            GmailMutationLog.event("picker_callback", EntityOperation.LABEL,
+                                                    "not_queued");
+                                            skipped++;
+                                        }
+                                    } else if (message != null)
+                                        EntityOperation.queue(context, message, EntityOperation.LABEL, label, set);
+                                }
 
-                                EntityOperation.queue(context, message, EntityOperation.LABEL, label, set);
+                                if (gmailApi && skipped > 0 && accountId > 0)
+                                    ServiceSynchronize.reload(context, accountId, false,
+                                            "Gmail label source stale");
+                                return skipped;
+                            }
 
-                                return null;
+                            @Override
+                            protected void onExecuted(Bundle args, Integer skipped) {
+                                if (skipped != null && skipped > 0 && getContext() != null)
+                                    ToastEx.makeText(getContext(), R.string.title_gmail_action_refresh,
+                                            Toast.LENGTH_LONG).show();
                             }
 
                             @Override

@@ -1113,20 +1113,40 @@ public class FragmentFolders extends FragmentBase {
                     if (account == null)
                         return null;
 
+                    if (account.isNativeRestApi() &&
+                            !FolderActionCapabilities.canEmptyFolder(account, folder)) {
+                        EntityLog.log(context, "Refused stale/unsupported empty-folder action account=" +
+                                account.id + " folder=" + folder.id + " type=" + folder.type);
+                        return null;
+                    }
+
                     EntityLog.log(context,
                             "Empty account=" + account.name + " folder=" + folder.name + " count=" + folder.total);
 
-                    List<Long> ids = db.message().getMessageByFolder(folder.id);
-                    for (Long id : ids) {
-                        EntityMessage message = db.message().getMessage(id);
-                        if (message == null)
-                            continue;
+                    if (account.isGmailApi()) {
+                        if (!GmailMailMutator.canExpungeFolder(true, folder.selectable,
+                                folder.type, folder.gmail_label_id)) {
+                            EntityLog.log(context, "Gmail REST refused empty-folder outside mapped Trash");
+                            return null;
+                        }
+                        EntityOperation.queue(context, folder, EntityOperation.EXPUNGE);
+                    } else if (account.isGraphApi() && EntityFolder.TRASH.equals(folder.type)) {
+                        EntityOperation.queueGraphTrashPurge(context, folder);
+                    } else if (account.isZohoApi()) {
+                        EntityOperation.queue(context, folder, EntityOperation.PURGE);
+                    } else {
+                        List<Long> ids = db.message().getMessageByFolder(folder.id);
+                        for (Long id : ids) {
+                            EntityMessage message = db.message().getMessage(id);
+                            if (message == null)
+                                continue;
 
-                        if (message.uid != null || account.protocol == EntityAccount.TYPE_POP)
-                            db.message().setMessageUiHide(message.id, true);
+                            if (message.uid != null || account.protocol == EntityAccount.TYPE_POP)
+                                db.message().setMessageUiHide(message.id, true);
+                        }
+
+                        EntityOperation.queue(context, folder, EntityOperation.PURGE);
                     }
-
-                    EntityOperation.queue(context, folder, EntityOperation.PURGE);
 
                     db.setTransactionSuccessful();
                 } finally {
@@ -1160,6 +1180,12 @@ public class FragmentFolders extends FragmentBase {
                     folder = db.folder().getFolder(id);
                     if (folder == null)
                         return null;
+
+                    if (folder.account != null) {
+                        EntityAccount account = db.account().getAccount(folder.account);
+                        if (account != null && account.isNativeRestApi())
+                            return null;
+                    }
 
                     int count = db.operation().getOperationCount(id, null);
                     if (count > 0)

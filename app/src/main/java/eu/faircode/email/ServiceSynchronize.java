@@ -124,6 +124,7 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
     private boolean isInCall = false;
     private boolean isInCar = false;
     private boolean isOptimizing = false;
+    private static final Map<String, GmailQuotaWindow> gmailQuotaWindows = new Hashtable<>();
 
     private MutableLiveData<Boolean> foreground = new MutableLiveData<>();
     private final Map<Long, Core.State> coreStates = new Hashtable<>();
@@ -135,6 +136,8 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
             Helper.getBackgroundExecutor(1, "sync");
     private static final ExecutorService executorNotify =
             Helper.getBackgroundExecutor(1, "notify");
+    private static final ExecutorService executorFolderSyncWakeup =
+            Helper.getBackgroundExecutor(1, "folder-sync-wakeup");
 
     static final int DEFAULT_BACKOFF_POWER = 3; // 2^3=8 seconds (totally 8+2x20=48 seconds)
 
@@ -382,12 +385,67 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
                             Core.State state = coreStates.get(current.accountState.id);
                             if (state != null)
                                 state.setNetworkState(current.networkState);
+                            boolean wakeReleased = false;
+                            if (state != null && GraphOperationWakeup.shouldWake(
+                                    current.accountState.isGraphApi(),
+                                    prev.accountState.graph_write_operations,
+                                    current.accountState.graph_write_operations)) {
+                                boolean released = GraphOperationWakeup.wake(state);
+                                wakeReleased = released;
+                                if (!released && state.isBackingOff())
+                                    Log.i("Graph write wakeup deferred during Retry-After backoff");
+                            }
+                            if (state != null && ZohoOperationWakeup.shouldWake(
+                                    current.accountState.isZohoApi(),
+                                    prev.accountState.zoho_wakeup_operations,
+                                    current.accountState.zoho_wakeup_operations)) {
+                                boolean released = ZohoOperationWakeup.wake(state);
+                                wakeReleased = (wakeReleased || released);
+                                if (!released && state.isBackingOff())
+                                    Log.i("Zoho REST operation wakeup deferred during Retry-After backoff");
+                            }
+
+                            boolean activeNetworkChanged = !Objects.equals(
+                                    prev.networkState.getActive(), current.networkState.getActive());
+                            boolean wakeNativeRest = ApiNetworkHibernation.shouldWakeOnNetworkChange(
+                                    current.accountState.isNativeRestApi(),
+                                    current.canRun(ServiceSynchronize.this),
+                                    prev.networkState.isSuitable(),
+                                    current.networkState.isSuitable(),
+                                    activeNetworkChanged);
+                            if (state != null && wakeNativeRest &&
+                                    prev.canRun(ServiceSynchronize.this) == current.canRun(ServiceSynchronize.this) &&
+                                    !wakeReleased) {
+                                boolean released = state.releaseUnlessBackingOff();
+                                if (released)
+                                    EntityLog.log(ServiceSynchronize.this, EntityLog.Type.Network,
+                                            "Native REST monitor woken after suitable active network change account=" +
+                                                    current.accountState.name);
+                                else if (state.isBackingOff())
+                                    Log.i("Native REST network wakeup deferred during Retry-After backoff");
+                            }
+
+                            ApiNetworkHibernation.Transition networkTransition =
+                                    ApiNetworkHibernation.Transition.NONE;
+                            if (prev.accountState.equals(current.accountState)) {
+                                networkTransition = ApiNetworkHibernation.getTransition(
+                                        current.accountState.isNativeRestApi(),
+                                        current.accountState.shouldRun(current.enabled),
+                                        prev.canRun(ServiceSynchronize.this),
+                                        current.canRun(ServiceSynchronize.this));
+                                if (networkTransition != ApiNetworkHibernation.Transition.NONE)
+                                    EntityLog.log(ServiceSynchronize.this, EntityLog.Type.Network,
+                                            (networkTransition == ApiNetworkHibernation.Transition.HIBERNATE
+                                                    ? "Native REST monitor hibernating; durable operations retained"
+                                                    : "Native REST monitor resuming on suitable network"));
+                            }
 
                             accountStates.remove(index);
 
                             // Some networks disallow email server connections:
                             // - reload on network type change when disconnected
                             if (reload ||
+                                    networkTransition != ApiNetworkHibernation.Transition.NONE ||
                                     prev.canRun(ServiceSynchronize.this) != current.canRun(ServiceSynchronize.this) ||
                                     !prev.accountState.equals(current.accountState)) {
                                 if (prev.canRun(ServiceSynchronize.this) || current.canRun(ServiceSynchronize.this))
@@ -432,7 +490,12 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
                                         EntityLog.log(ServiceSynchronize.this, EntityLog.Type.Scheduling,
                                                 "### changed " + current +
                                                         " active=" + prev.networkState.getActive() + "/" + current.networkState.getActive());
-                                        state.error(new OperationCanceledException("Active network changed"));
+                                        if (!ApiNetworkHibernation.shouldUseLegacyNetworkChangeCancellation(
+                                                current.accountState.isNativeRestApi()))
+                                            EntityLog.log(ServiceSynchronize.this, EntityLog.Type.Network,
+                                                    "Native REST active network changed; wake handled without legacy cancellation");
+                                        else
+                                            state.error(new OperationCanceledException("Active network changed"));
                                     }
                                 }
                             }
@@ -523,7 +586,10 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
                                 db.beginTransaction();
 
                                 db.account().setAccountState(accountNetworkState.accountState.id, null);
-                                db.account().setAccountBackoff(accountNetworkState.accountState.id, null);
+                                Long backoffUntil = accountNetworkState.accountState.backoff_until;
+                                if (!accountNetworkState.accountState.isNativeRestApi() ||
+                                        backoffUntil == null || backoffUntil <= new Date().getTime())
+                                    db.account().setAccountBackoff(accountNetworkState.accountState.id, null);
 
                                 for (EntityFolder folder : db.folder().getFolders(accountNetworkState.accountState.id, false, false)) {
                                     db.folder().setFolderState(folder.id, null);
@@ -560,7 +626,11 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
                     public void delegate() {
                         try {
                             int start_delay = prefs.getInt("start_delay", 0);
-                            if (start_delay > 0) {
+                            boolean gmailFolderSyncNow =
+                                    accountNetworkState.accountState.isGmailApi() &&
+                                            hasRequestedGmailFolderSync(DB.getInstance(ServiceSynchronize.this),
+                                                    accountNetworkState.accountState.id);
+                            if (start_delay > 0 && !gmailFolderSyncNow) {
                                 Semaphore sem;
                                 synchronized (startSerializer) {
                                     if (!startSerializer.containsKey(accountNetworkState.accountState.host))
@@ -1252,6 +1322,62 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
         command.putString("name", "eval");
         command.putLong("account", intent.getLongExtra("account", -1));
         liveAccountNetworkState.post(command);
+        wakeRequestedApiFolderSync(command.getLong("account", -1));
+    }
+
+    private void wakeRequestedApiFolderSync(long accountId) {
+        List<Long> ids = (accountId > 0
+                ? Collections.singletonList(accountId)
+                : new ArrayList<>(coreStates.keySet()));
+        FolderSyncWakeup.enqueue(executorFolderSyncWakeup, ids,
+                new FolderSyncWakeup.Listener() {
+                    @Override
+                    public boolean hasRequestedFolderSync(long id) {
+                        // This callback runs on the dedicated worker, never the service/main thread.
+                        DB db = DB.getInstance(ServiceSynchronize.this);
+                        EntityAccount account = db.account().getAccount(id);
+                        if (account == null)
+                            return false;
+                        if (account.isGmailApi())
+                            return hasRequestedGmailWork(db, id);
+                        if (account.isGraphApi())
+                            return hasRequestedGraphFolderSync(db, id);
+                        return ZohoOperationWakeup.shouldWakeForRequestedFolderSync(
+                                account.isZohoApi(), hasRequestedZohoFolderSync(db, id));
+                    }
+
+                    @Override
+                    public void wake(long id) {
+                        Core.State state = coreStates.get(id);
+                        if (state != null) {
+                            EntityAccount account = DB.getInstance(ServiceSynchronize.this)
+                                    .account().getAccount(id);
+                            boolean released;
+                            if (account != null && (account.isGraphApi() || account.isZohoApi()))
+                                released = state.releaseUnlessBackingOff();
+                            else if (account != null && account.isGmailApi())
+                                released = GmailOperationWakeup.wake(state);
+                            else
+                                released = state.release();
+                            if (!released)
+                                EntityLog.log(ServiceSynchronize.this, EntityLog.Type.Scheduling,
+                                        "### API folder request wakeup deferred account=" + id);
+                        }
+                    }
+
+                    @Override
+                    public void onError(long id, Throwable ex) {
+                        Log.w("API requested-folder wakeup account=" + id, ex);
+                    }
+                });
+    }
+
+    private static boolean hasRequestedGraphFolderSync(DB db, long accountId) {
+        for (EntityOperation operation : db.operation().getOperations(accountId, EntityOperation.SYNC))
+            if (operation.folder != null &&
+                    GraphMailReceiver.isRequestedFolderSync(db.folder().getFolder(operation.folder)))
+                return true;
+        return NativeApiContentOperations.hasPending(db, accountId);
     }
 
     private void onReload(Intent intent) {
@@ -1266,6 +1392,7 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
         command.putLong("account", intent.getLongExtra("account", -1));
         command.putBoolean("force", force);
         liveAccountNetworkState.post(command);
+        wakeRequestedApiFolderSync(command.getLong("account", -1));
     }
 
     private void onWakeup(Intent intent) {
@@ -1620,9 +1747,857 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
         return builder;
     }
 
+    static String getGmailQuotaKey(String identity, long fallbackId) {
+        String quotaIdentity = (TextUtils.isEmpty(identity)
+                ? Long.toString(fallbackId) : identity.trim().toLowerCase(java.util.Locale.ROOT));
+        return "gmail_rest_quota_v1." + java.util.UUID.nameUUIDFromBytes(
+                quotaIdentity.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    static GmailQuotaWindow getGmailQuotaWindow(SharedPreferences preferences, String key) {
+        synchronized (gmailQuotaWindows) {
+            GmailQuotaWindow window = gmailQuotaWindows.get(key);
+            if (window == null) {
+                window = new GmailQuotaWindow(preferences.getString(key, null));
+                gmailQuotaWindows.put(key, window);
+            }
+            return window;
+        }
+    }
+
+    private void monitorGmailAccount(final EntityAccount account, final Core.State state) {
+        final DB db = DB.getInstance(this);
+        final Long currentThread = Thread.currentThread().getId();
+        final PowerManager pm = Helper.getSystemService(this, PowerManager.class);
+        final PowerManager.WakeLock wlAccount = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK, BuildConfig.APPLICATION_ID + ":gmail." + account.id);
+        final SharedPreferences quotaPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        final String quotaKey = getGmailQuotaKey(account.user, account.id);
+        final GmailQuotaWindow quotaWindow = getGmailQuotaWindow(quotaPreferences, quotaKey);
+        db.account().setAccountThread(account.id, currentThread);
+        int staleExists = db.operation().deleteOperationsByAccount(account.id, EntityOperation.EXISTS);
+        if (staleExists > 0)
+            EntityLog.log(this, "Gmail API removed stale legacy EXISTS operations=" + staleExists);
+        state.setBackoff(CONNECT_BACKOFF_START);
+        EntityFolder inbox = db.folder().getFolderByType(account.id, EntityFolder.INBOX);
+        long delay = AccountPollInterval.getDelayMillis(account.poll_interval);
+        long quotaBackoffUntil = (account.backoff_until == null ? 0 : account.backoff_until);
+        long retryBackoffUntil = 0;
+        boolean accountConnected = (quotaBackoffUntil > new Date().getTime());
+        long nextPollAt = 0;
+        int quotaFailures = 0;
+        int transportFailures = 0;
+        List<GmailApi.Label> labels = null;
+        long labelsFetchedAt = 0;
+        try {
+            while (state.isRunning() && currentThread.equals(db.account().getAccountThread(account.id))) {
+                if (ApiNetworkHibernation.parkIfOffline(this, db, account, state))
+                    return;
+                int pendingFolderRequests = countRequestedGmailFolderSync(db, account.id) +
+                        GmailReceiver.countInitialFolderPages(db, account.id);
+                List<EntityOperation> pendingGmailOperations =
+                        db.operation().getOperations(account.id);
+                boolean pendingGmailWrites = GmailOperationWakeup.hasPendingWrite(pendingGmailOperations);
+                boolean pendingGmailContent = NativeApiContentOperations.hasPending(pendingGmailOperations);
+                boolean pendingGmailPriorityWork = pendingGmailWrites || pendingGmailContent;
+                long now = System.currentTimeMillis();
+                boolean labelsRefreshDue = (labels == null ||
+                        now - labelsFetchedAt >= 15 * 60 * 1000L);
+                // History/full sync continues alongside explicitly requested folder pages,
+                // so always reserve the ordinary account-sync budget as well.
+                int baseReserveUnits = GmailQuotaWindow.PASS_BASE_RESERVE_UNITS;
+                GmailQuotaWindow.PassPlan quotaPlan = quotaWindow.beginPass(
+                        now, pendingFolderRequests, pendingGmailPriorityWork,
+                        quotaBackoffUntil, retryBackoffUntil, nextPollAt, baseReserveUnits);
+                if (quotaPlan.isReserved())
+                    quotaPreferences.edit().putString(quotaKey,
+                            quotaWindow.serialize(now)).commit();
+                long nextAllowedAt = quotaPlan.allowedAt;
+                long waitUntil = nextAllowedAt - new Date().getTime();
+                if (waitUntil > 0) {
+                    if (accountConnected)
+                        db.account().setAccountState(account.id, "connected");
+                    state.acquire(waitUntil, false);
+                    if (state.isRunning())
+                        continue;
+                }
+                if (!quotaPlan.isReserved())
+                    continue;
+                state.reset();
+                try {
+                    if (!state.isRunning() ||
+                            ApiNetworkHibernation.parkIfOffline(this, db, account, state))
+                        return;
+                    wlAccount.acquire(Helper.WAKELOCK_MAX);
+                    db.account().setAccountState(account.id, "connecting");
+                    ServiceAuthenticator authenticator = new ServiceAuthenticator(
+                            this, account.auth_type, account.provider, account.user, account.password,
+                            new ServiceAuthenticator.IAuthenticated() {
+                                @Override
+                                public void onPasswordChanged(Context context, String newPassword) {
+                                    db.account().setAccountPassword(account.id, newPassword,
+                                            ServiceAuthenticator.AUTH_TYPE_GMAIL, account.provider);
+                                    account.auth_type = ServiceAuthenticator.AUTH_TYPE_GMAIL;
+                                    account.password = newPassword;
+                                }
+                            });
+                    String accessToken = authenticator.refreshToken(false);
+                    if (labelsRefreshDue)
+                        labels = null;
+                    GmailApi api = new GmailApi(accessToken);
+                    api.setTokenRefresher(rejectedToken -> authenticator.refreshGmailTokenAfterUnauthorized());
+                    api.setQuotaUsageListener(units -> {
+                        long requestAt = System.currentTimeMillis();
+                        quotaWindow.recordRequest(requestAt, units);
+                        quotaPreferences.edit().putString(quotaKey,
+                                quotaWindow.serialize(requestAt)).apply();
+                    });
+                    // Complete explicit content requests before sync; one bad remote row must not starve them.
+                    GmailMailMutator.process(this, db, account, api, state);
+                    NativeApiContentOperations.process(this, db, account, state, api, null, null);
+                    boolean folderSyncRequested = hasRequestedGmailOlderPage(db, account.id);
+                    GmailReceiver.SyncResult result = GmailReceiver.syncInbox(this, db, account,
+                            api, state, labels, folderSyncRequested);
+                    labels = result.labels;
+                    GmailReceiver.SyncResult initialFolders = GmailReceiver.syncInitialFolderPages(
+                            this, db, account, api, state, labels, quotaPlan.folderPageLimit);
+                    int remainingFolderPageLimit = Math.max(0,
+                            quotaPlan.folderPageLimit - initialFolders.pages);
+                    boolean moreFolderPages = syncRequestedGmailFolders(
+                            db, account, api, state, labels, remainingFolderPageLimit);
+                    moreFolderPages |= initialFolders.morePending;
+                    // Imports using fast_fetch may have queued BODY work during this pass.
+                    NativeApiContentOperations.process(this, db, account, state, api, null, null);
+                    if (labelsRefreshDue)
+                        labelsFetchedAt = new Date().getTime();
+                    inbox = db.folder().getFolderByType(account.id, EntityFolder.INBOX);
+                    if (inbox != null) {
+                        db.folder().setFolderError(inbox.id, null);
+                        db.folder().setFolderState(inbox.id, "connected");
+                    }
+                    db.account().setAccountConnected(account.id, new Date().getTime());
+                    db.account().setAccountError(account.id, null);
+                    db.account().setAccountBackoff(account.id, null);
+                    db.account().setAccountState(account.id, "connected");
+                    accountConnected = true;
+                    quotaFailures = 0;
+                    transportFailures = 0;
+                    quotaBackoffUntil = 0;
+                    retryBackoffUntil = 0;
+                    EntityLog.log(this, EntityLog.Type.Account, account,
+                            account.name + " Gmail REST mode=" + result.mode +
+                                    " imported=" + result.imported +
+                                    " more=" + result.morePending);
+                    delay = (result.morePending || moreFolderPages
+                            ? 0
+                            : AccountPollInterval.getDelayMillis(account.poll_interval));
+                } catch (Throwable ex) {
+                    if (state.isRunning()) {
+                        if (ApiNetworkHibernation.hibernateOnTransportFailure(
+                                this, db, account, state, ex))
+                            return;
+                        Log.e(account.name + " Gmail REST", ex);
+                        if (ex instanceof GmailApi.ApiException &&
+                                ((GmailApi.ApiException) ex).isRateLimitFailure()) {
+                            GmailApi.ApiException apiError = (GmailApi.ApiException) ex;
+                            long jitter = java.util.concurrent.ThreadLocalRandom.current()
+                                    .nextLong(GmailRateLimitBackoff.MAX_JITTER_MS + 1);
+                            GmailRateLimitBackoff.RetryPlan retry = GmailRateLimitBackoff.forRateLimit(
+                                    quotaFailures++, apiError.retryAfterMs, jitter, new Date().getTime());
+                            quotaBackoffUntil = retry.nextAttemptAt;
+                            retryBackoffUntil = 0;
+                            accountConnected = retry.keepAccountConnected;
+                            db.account().setAccountBackoff(account.id, retry.nextAttemptAt);
+                            db.account().setAccountError(account.id, null);
+                            db.account().setAccountState(account.id,
+                                    (retry.keepAccountConnected ? "connected" : null));
+                            if (inbox != null) {
+                                db.folder().setFolderError(inbox.id, null);
+                                db.folder().setFolderState(inbox.id, "connected");
+                            }
+                            setPendingGmailFolderStates(db, account.id, "connected", null);
+                            EntityLog.log(this, EntityLog.Type.Account, account,
+                                    "Gmail REST quota/rate limit; preserving sync cursors and connected state; retry in " +
+                                            retry.delayMs + " ms" +
+                                            (apiError.retryAfterMs > 0 ? " (Retry-After honored)" : " (exponential backoff)"));
+                            delay = retry.delayMs;
+                        } else if (ApiNetworkHibernation.isTransportFailure(ex)) {
+                            accountConnected = false;
+                            ApiNetworkHibernation.clearTransientWorkerState(db, account);
+                            transportFailures++;
+                            delay = ApiNetworkHibernation.getTransportRetryDelayMs(transportFailures);
+                            retryBackoffUntil = System.currentTimeMillis() + delay;
+                            EntityLog.log(this, EntityLog.Type.Network,
+                                    "Gmail REST transient transport failure; retry in " + delay + " ms");
+                        } else {
+                            accountConnected = false;
+                            if (inbox != null) {
+                                db.folder().setFolderError(inbox.id, Log.formatThrowable(ex));
+                                db.folder().setFolderState(inbox.id, null);
+                            }
+                            setPendingGmailFolderStates(db, account.id, null, Log.formatThrowable(ex));
+                            db.account().setAccountError(account.id, Log.formatThrowable(ex));
+                            db.account().setAccountState(account.id, null);
+                            String failure = Log.formatThrowable(ex);
+                            if (failure != null &&
+                                    (failure.contains("Gmail requires Google authorization") ||
+                                            failure.contains("Gmail access needs your approval"))) {
+                                try {
+                                    NotificationManager nm = Helper.getSystemService(this, NotificationManager.class);
+                                    if (NotificationHelper.areNotificationsEnabled(nm))
+                                        nm.notify("receive:" + account.id,
+                                                NotificationHelper.NOTIFICATION_TAGGED,
+                                                Core.getNotificationError(this, "error", account, null, null, ex).build());
+                                } catch (Throwable notifyError) {
+                                    Log.w(notifyError);
+                                }
+                            }
+                            delay = Math.min(Math.max(60 * 1000L, delay * 2), 60 * 60 * 1000L);
+                            retryBackoffUntil = System.currentTimeMillis() + delay;
+                        }
+                    }
+                } finally {
+                    quotaWindow.finishPass(quotaPlan.reservationId, System.currentTimeMillis());
+                    quotaPreferences.edit().putString(quotaKey,
+                            quotaWindow.serialize(System.currentTimeMillis())).apply();
+                    if (wlAccount.isHeld())
+                        wlAccount.release();
+                    long completed = new Date().getTime();
+                    nextPollAt = completed + delay;
+                }
+            }
+        } catch (InterruptedException ex) {
+            if (state.isRunning())
+                Log.i(account.name + " Gmail REST wait interrupted");
+        } finally {
+            if (wlAccount.isHeld())
+                wlAccount.release();
+            if (currentThread.equals(db.account().getAccountThread(account.id))) {
+                db.account().setAccountState(account.id, null);
+                db.account().setAccountThread(account.id, null);
+            }
+        }
+    }
+
+    private boolean syncRequestedGmailFolders(DB db, EntityAccount account, GmailApi api,
+                                             Core.State state, List<GmailApi.Label> labels,
+                                             int pageLimit)
+            throws IOException, org.json.JSONException, MessagingException,
+            OperationCanceledException {
+        final java.util.Set<Long> processedFolders = new java.util.HashSet<>();
+        int pages = 0;
+        for (EntityOperation queued : db.operation().getOperations(account.id, EntityOperation.SYNC)) {
+            EntityOperation operation = db.operation().getOperation(queued.id);
+            if (operation == null)
+                continue;
+            if (operation.folder == null) {
+                db.operation().deleteOperation(operation.id);
+                continue;
+            }
+            EntityFolder folder = db.folder().getFolder(operation.folder);
+            if (folder == null) {
+                db.operation().deleteOperation(operation.id);
+                continue;
+            }
+            boolean olderPage = GmailReceiver.isOlderPageRequest(operation.args);
+            if (!NativeApiSyncRequest.shouldProcessGmailFolderSync(
+                    GmailReceiver.isRequestedFolderSync(folder), olderPage)) {
+                int removed = db.operation().deleteOperationIfArgs(operation.id, operation.args);
+                if (removed == 0 && db.operation().getOperation(operation.id) != null)
+                    continue;
+                continue;
+            }
+            if (!processedFolders.add(folder.id)) {
+                db.operation().deleteOperation(operation.id);
+                continue;
+            }
+
+            boolean exhausted = GmailReceiver.PAGE_TOKEN_EXHAUSTED.equals(folder.gmail_page_token);
+            if (olderPage && !exhausted && pages >= Math.max(0, pageLimit))
+                continue;
+
+            GmailReceiver.SyncResult result = null;
+            if (olderPage) {
+                db.folder().setFolderState(folder.id, "connecting");
+                result = GmailReceiver.syncFolderPage(
+                        ServiceSynchronize.this, db, account, api, state, folder, labels);
+                if (!exhausted)
+                    pages++;
+            }
+            // Non-older requests have already been fulfilled by syncInbox/history above.
+            // Do not erase a Gmail Fetch more request upgraded after this worker read
+            // the ordinary sync row; leave it queued for the next service pass.
+            int removed = db.operation().deleteOperationIfArgs(operation.id, operation.args);
+            if (removed == 0 && db.operation().getOperation(operation.id) != null)
+                continue;
+            if (db.operation().getOperationCount(folder.id, EntityOperation.SYNC) == 0)
+                db.folder().setFolderSyncState(folder.id, null);
+            db.folder().setFolderError(folder.id, null);
+            db.folder().setFolderState(folder.id, "connected");
+            db.folder().setFolderLastSync(folder.id, new Date().getTime());
+            if (result != null)
+                EntityLog.log(ServiceSynchronize.this, EntityLog.Type.Account, account,
+                        account.name + " Gmail REST folder=" + folder.type + " imported=" +
+                                result.imported + " mode=" + result.mode);
+        }
+        return hasRequestedGmailFolderSync(db, account.id);
+    }
+
+    private static int countRequestedGmailFolderSync(DB db, long accountId) {
+        int count = 0;
+        for (EntityOperation operation : db.operation().getOperations(accountId, EntityOperation.SYNC))
+            if (operation.folder != null &&
+                    NativeApiSyncRequest.shouldProcessGmailFolderSync(
+                            GmailReceiver.isRequestedFolderSync(db.folder().getFolder(operation.folder)),
+                            GmailReceiver.isOlderPageRequest(operation.args)))
+                count++;
+        return count;
+    }
+
+    private static boolean hasRequestedGmailOlderPage(DB db, long accountId) {
+        for (EntityOperation operation : db.operation().getOperations(accountId, EntityOperation.SYNC))
+            if (operation.folder != null && GmailReceiver.isOlderPageRequest(operation.args))
+                return true;
+        return false;
+    }
+
+    private static void setPendingGmailFolderStates(DB db, long accountId,
+                                                    String state, String error) {
+        for (EntityOperation operation : db.operation().getOperations(accountId, EntityOperation.SYNC))
+            if (operation.folder != null) {
+                EntityFolder folder = db.folder().getFolder(operation.folder);
+                if (folder != null && NativeApiSyncRequest.shouldProcessGmailFolderSync(
+                        GmailReceiver.isRequestedFolderSync(folder),
+                        GmailReceiver.isOlderPageRequest(operation.args))) {
+                    db.folder().setFolderState(folder.id, state);
+                    db.folder().setFolderError(folder.id, error);
+                }
+        }
+    }
+
+    private static boolean hasRequestedGmailFolderSync(DB db, long accountId) {
+        for (EntityOperation operation : db.operation().getOperations(accountId, EntityOperation.SYNC))
+            if (operation.folder != null &&
+                    NativeApiSyncRequest.shouldProcessGmailFolderSync(
+                            GmailReceiver.isRequestedFolderSync(db.folder().getFolder(operation.folder)),
+                            GmailReceiver.isOlderPageRequest(operation.args)))
+                return true;
+        return false;
+    }
+
+    private static boolean hasPendingGmailWrite(DB db, long accountId) {
+        return GmailOperationWakeup.hasPendingWrite(db.operation().getOperations(accountId));
+    }
+
+    private static boolean hasRequestedGmailWork(DB db, long accountId) {
+        return GmailOperationWakeup.hasWork(
+                hasRequestedGmailFolderSync(db, accountId),
+                hasPendingGmailWrite(db, accountId),
+                NativeApiContentOperations.hasPending(db, accountId));
+    }
+
+    private void monitorGraphAccount(final EntityAccount account, final Core.State state) {
+        final DB db = DB.getInstance(this);
+        final Long currentThread = Thread.currentThread().getId();
+        final PowerManager pm = Helper.getSystemService(this, PowerManager.class);
+        final PowerManager.WakeLock wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK, BuildConfig.APPLICATION_ID + ":graph." + account.id);
+        db.account().setAccountThread(account.id, currentThread);
+        long pollDelay = AccountPollInterval.getDelayMillis(account.poll_interval);
+        long delay = pollDelay;
+        long rateLimitUntil = (account.backoff_until == null ? 0 : account.backoff_until);
+        int transportFailures = 0;
+        try {
+            while (state.isRunning() && currentThread.equals(db.account().getAccountThread(account.id))) {
+                if (ApiNetworkHibernation.parkIfOffline(this, db, account, state))
+                    return;
+                state.reset();
+                long rateLimitRemaining = Math.max(0, rateLimitUntil - System.currentTimeMillis());
+                if (rateLimitRemaining > 0) {
+                    state.acquireRateLimitWait(rateLimitRemaining);
+                    if (!state.isRunning())
+                        break;
+                    if (rateLimitUntil > System.currentTimeMillis())
+                        continue;
+                    rateLimitUntil = 0;
+                }
+                long waitDelay = delay;
+                boolean rateLimitWait = false;
+                try {
+                    if (!state.isRunning() ||
+                            ApiNetworkHibernation.parkIfOffline(this, db, account, state))
+                        return;
+                    wakeLock.acquire(Helper.WAKELOCK_MAX);
+                    db.account().setAccountState(account.id, "connecting");
+                    ServiceAuthenticator authenticator = new ServiceAuthenticator(
+                            this, ServiceAuthenticator.AUTH_TYPE_GRAPH_API, account.provider,
+                            account.user, account.password,
+                            new ServiceAuthenticator.IAuthenticated() {
+                                @Override
+                                public void onPasswordChanged(Context context, String newPassword) {
+                                    db.account().setAccountPassword(account.id, newPassword,
+                                            ServiceAuthenticator.AUTH_TYPE_GRAPH_API, GraphOAuth.PROVIDER_ID);
+                                    account.auth_type = ServiceAuthenticator.AUTH_TYPE_GRAPH_API;
+                                    account.provider = GraphOAuth.PROVIDER_ID;
+                                    account.password = newPassword;
+                                }
+                            });
+                    String accessToken = authenticator.refreshToken(false);
+                    GraphMailApi api = new GraphMailApi(this, accessToken);
+                    api.setTokenRefresher(rejected -> {
+                        try {
+                            return authenticator.refreshGraphTokenAfterUnauthorized();
+                        } catch (org.json.JSONException ex) {
+                            throw new IOException("Microsoft Graph mail token refresh failed", ex);
+                        }
+                    });
+
+                    // Keep body/attachment requests independent of delta-import failures.
+                    GraphMailMutator.process(this, db, account, api, state);
+                    NativeApiContentOperations.process(this, db, account, state, null, null, api);
+                    int requestedImported = syncRequestedGraphFolders(db, account, api, state);
+                    GraphMailReceiver.SyncResult inboxResult = GraphMailReceiver.syncInbox(
+                            this, db, account, api, state);
+                    GraphMailReceiver.SyncResult selectedResult = GraphMailReceiver.syncOtherSelectedFolders(
+                            this, db, account, api, state);
+
+                    // Process BODY work deferred by imports after the delta page completes.
+                    NativeApiContentOperations.process(this, db, account, state, null, null, api);
+                    EntityFolder inbox = db.folder().getFolderByType(account.id, EntityFolder.INBOX);
+                    if (inbox != null) {
+                        db.folder().setFolderError(inbox.id, null);
+                        db.folder().setFolderState(inbox.id, "connected");
+                    }
+                    db.account().setAccountConnected(account.id, System.currentTimeMillis());
+                    db.account().setAccountError(account.id, null);
+                    db.account().setAccountBackoff(account.id, null);
+                    account.backoff_until = null;
+                    db.account().setAccountState(account.id, "connected");
+                    transportFailures = 0;
+                    EntityLog.log(this, EntityLog.Type.Account, account,
+                            account.name + " Microsoft Graph REST imported=" +
+                                    (requestedImported + inboxResult.imported + selectedResult.imported) +
+                                    " deltaPages=" + (inboxResult.pages + selectedResult.pages));
+                    delay = pollDelay;
+                    waitDelay = pollDelay;
+                } catch (Throwable ex) {
+                    if (state.isRunning()) {
+                        if (ApiNetworkHibernation.hibernateOnTransportFailure(
+                                this, db, account, state, ex))
+                            return;
+                        Log.e(account.name + " Microsoft Graph REST", ex);
+                        if (ex instanceof GraphMailApi.ApiException &&
+                                ApiNetworkHibernation.isRetryableApiFailure(ex)) {
+                            ApiNetworkHibernation.clearTransientWorkerState(db, account);
+                            rateLimitWait = true;
+                            long retryAfter = ((GraphMailApi.ApiException) ex).retryAfterMs;
+                            delay = (retryAfter > 0 ? Math.max(1000L, retryAfter) :
+                                    Math.min(Math.max(60 * 1000L, delay * 2), 60 * 60 * 1000L));
+                            long now = System.currentTimeMillis();
+                            rateLimitUntil = (Long.MAX_VALUE - now < delay
+                                    ? Long.MAX_VALUE : now + delay);
+                            account.backoff_until = rateLimitUntil;
+                            db.account().setAccountBackoff(account.id, rateLimitUntil);
+                        } else if (ApiNetworkHibernation.isTransportFailure(ex)) {
+                            ApiNetworkHibernation.clearTransientWorkerState(db, account);
+                            transportFailures++;
+                            delay = ApiNetworkHibernation.getTransportRetryDelayMs(transportFailures);
+                            EntityLog.log(this, EntityLog.Type.Network,
+                                    "Microsoft Graph REST transient transport failure; retry in " + delay + " ms");
+                        } else {
+                            EntityFolder inbox = db.folder().getFolderByType(account.id, EntityFolder.INBOX);
+                            if (inbox != null) {
+                                db.folder().setFolderError(inbox.id, Log.formatThrowable(ex));
+                                db.folder().setFolderState(inbox.id, null);
+                            }
+                            db.account().setAccountError(account.id, Log.formatThrowable(ex));
+                            db.account().setAccountState(account.id, null);
+                            delay = Math.min(Math.max(60 * 1000L, delay * 2), 60 * 60 * 1000L);
+                        }
+                        waitDelay = delay;
+                    }
+                } finally {
+                    if (wakeLock.isHeld())
+                        wakeLock.release();
+                }
+
+                if (state.isRunning()) {
+                    if (rateLimitWait)
+                        state.acquireRateLimitWait(waitDelay);
+                    else
+                        state.acquire(waitDelay, false);
+                }
+            }
+        } catch (InterruptedException ex) {
+            if (state.isRunning())
+                Log.i(account.name + " Microsoft Graph REST wait interrupted");
+        } finally {
+            if (wakeLock.isHeld())
+                wakeLock.release();
+            if (currentThread.equals(db.account().getAccountThread(account.id))) {
+                db.account().setAccountState(account.id, null);
+                db.account().setAccountThread(account.id, null);
+            }
+        }
+    }
+
+    private int syncRequestedGraphFolders(DB db, EntityAccount account,
+                                          GraphMailApi api, Core.State state)
+            throws IOException, org.json.JSONException, MessagingException,
+            OperationCanceledException {
+        int imported = 0;
+        java.util.Set<Long> processedFolders = new java.util.HashSet<>();
+        for (EntityOperation operation : db.operation().getOperations(account.id, EntityOperation.SYNC)) {
+            if (operation.folder == null) {
+                db.operation().deleteOperation(operation.id);
+                continue;
+            }
+            EntityFolder folder = db.folder().getFolder(operation.folder);
+            if (folder == null || TextUtils.isEmpty(folder.graph_folder_id)) {
+                db.operation().deleteOperation(operation.id);
+                if (folder != null) {
+                    db.folder().setFolderSyncState(folder.id, null);
+                    db.folder().setFolderState(folder.id, null);
+                }
+                continue;
+            }
+            boolean olderPage = GraphMailReceiver.isOlderPageRequest(operation.args);
+            if (!NativeApiSyncRequest.shouldProcessNativeFolderSync(
+                    GraphMailReceiver.isRequestedFolderSync(folder), olderPage)) {
+                db.operation().deleteOperation(operation.id);
+                continue;
+            }
+            if (!processedFolders.add(folder.id)) {
+                db.operation().deleteOperation(operation.id);
+                continue;
+            }
+
+            db.folder().setFolderState(folder.id, "connecting");
+            GraphMailReceiver.SyncResult result = (olderPage
+                    ? GraphMailReceiver.syncFolderPage(this, db, account, api, state, folder)
+                    : GraphMailReceiver.syncFolderDelta(this, db, account, api, state, folder));
+            db.operation().deleteOperation(operation.id);
+            if (db.operation().getOperationCount(folder.id, EntityOperation.SYNC) == 0)
+                db.folder().setFolderSyncState(folder.id, null);
+            db.folder().setFolderError(folder.id, null);
+            db.folder().setFolderState(folder.id, "connected");
+            db.folder().setFolderLastSync(folder.id, System.currentTimeMillis());
+            imported += result.imported;
+        }
+        return imported;
+    }
+
+    private void monitorZohoAccount(final EntityAccount account, final Core.State state) {
+        final DB db = DB.getInstance(this);
+        final Long currentThread = Thread.currentThread().getId();
+        final PowerManager pm = Helper.getSystemService(this, PowerManager.class);
+        final PowerManager.WakeLock wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK, BuildConfig.APPLICATION_ID + ":zoho." + account.id);
+        db.account().setAccountThread(account.id, currentThread);
+        long pollDelay = AccountPollInterval.getDelayMillis(account.poll_interval);
+        long delay = pollDelay;
+        long rateLimitUntil = (account.backoff_until == null ? 0 : account.backoff_until);
+        int transportFailures = 0;
+        try {
+            while (state.isRunning() && currentThread.equals(db.account().getAccountThread(account.id))) {
+                if (ApiNetworkHibernation.parkIfOffline(this, db, account, state))
+                    return;
+                state.reset();
+                long rateLimitRemaining = Math.max(0, rateLimitUntil - System.currentTimeMillis());
+                if (rateLimitRemaining > 0) {
+                    state.acquireRateLimitWait(rateLimitRemaining);
+                    if (!state.isRunning())
+                        break;
+                    if (rateLimitUntil > System.currentTimeMillis())
+                        continue;
+                    rateLimitUntil = 0;
+                }
+                long waitDelay = delay;
+                boolean rateLimitWait = false;
+                try {
+                    if (!state.isRunning() ||
+                            ApiNetworkHibernation.parkIfOffline(this, db, account, state))
+                        return;
+                    wakeLock.acquire(Helper.WAKELOCK_MAX);
+                    db.account().setAccountState(account.id, "connecting");
+                    ServiceAuthenticator authenticator = new ServiceAuthenticator(
+                            this, account.auth_type, account.provider, account.user, account.password,
+                            new ServiceAuthenticator.IAuthenticated() {
+                                @Override
+                                public void onPasswordChanged(Context context, String newPassword) {
+                                    db.account().setAccountPassword(account.id, newPassword,
+                                            ServiceAuthenticator.AUTH_TYPE_ZOHO, ZohoOAuth.PROVIDER_ID);
+                                    account.auth_type = ServiceAuthenticator.AUTH_TYPE_ZOHO;
+                                    account.provider = ZohoOAuth.PROVIDER_ID;
+                                    account.password = newPassword;
+                                }
+                            });
+                    String accessToken = authenticator.refreshToken(false);
+                    ZohoState tokenState = ZohoState.jsonDeserialize(account.password);
+                    ZohoApi api = new ZohoApi(accessToken, tokenState.apiDomain, tokenState.accountId);
+                    api.setProtocolLogContext(this);
+                    api.setTokenRefresher(rejected -> authenticator.refreshZohoTokenAfterUnauthorized());
+
+                    // A transient mailbox-import error must not block explicit content requests.
+                    ZohoMailMutator.process(this, db, account, api, state);
+                    NativeApiContentOperations.process(this, db, account, state, null, api, null);
+                    ZohoReceiver.SyncResult folderResult = syncRequestedZohoFolder(
+                            db, account, api, state);
+                    EntityFolder inboxFolder = db.folder().getFolderByType(account.id, EntityFolder.INBOX);
+                    boolean inboxChecked = (folderResult != null && inboxFolder != null &&
+                            folderResult.folderIds.contains(inboxFolder.id));
+                    ZohoReceiver.SyncResult inboxResult = (inboxChecked
+                            ? new ZohoReceiver.SyncResult(0, false, "inbox-window-already-checked", 0, null)
+                            : ZohoReceiver.syncInbox(this, db, account, api, state));
+                    java.util.Set<Long> checkedFolders = new java.util.HashSet<>();
+                    if (folderResult != null)
+                        checkedFolders.addAll(folderResult.folderIds);
+                    checkedFolders.addAll(inboxResult.folderIds);
+                    ZohoReceiver.SyncResult selectedResult = ZohoReceiver.syncSelectedFolderHeads(
+                            this, db, account, api, state, checkedFolders);
+                    // fast_fetch BODY requests are created during import and run in this pass.
+                    NativeApiContentOperations.process(this, db, account, state, null, api, null);
+
+                    EntityFolder inbox = db.folder().getFolderByType(account.id, EntityFolder.INBOX);
+                    if (inbox != null) {
+                        db.folder().setFolderError(inbox.id, null);
+                        db.folder().setFolderState(inbox.id, "connected");
+                    }
+                    db.account().setAccountConnected(account.id, System.currentTimeMillis());
+                    db.account().setAccountError(account.id, null);
+                    db.account().setAccountBackoff(account.id, null);
+                    account.backoff_until = null;
+                    db.account().setAccountState(account.id, "connected");
+                    transportFailures = 0;
+                    EntityLog.log(this, EntityLog.Type.Account, account,
+                            account.name + " Zoho REST inbox imported=" + inboxResult.imported +
+                                    (folderResult == null ? "" : " folder=" + folderResult.mode +
+                                            " imported=" + folderResult.imported) +
+                                    " selected=" + selectedResult.mode +
+                                    " imported=" + selectedResult.imported);
+                    boolean morePending = ((folderResult != null && folderResult.morePending) ||
+                            inboxResult.morePending || selectedResult.morePending);
+                    // Retain the one-minute backoff base for a subsequent failure, but do not
+                    // impose that minute on successful continuation between bounded batches.
+                    delay = (morePending ? 60 * 1000L : pollDelay);
+                    waitDelay = ZohoFolderPageBatch.successfulPassWaitMs(morePending, pollDelay);
+                } catch (Throwable ex) {
+                    if (state.isRunning()) {
+                        if (ApiNetworkHibernation.hibernateOnTransportFailure(
+                                this, db, account, state, ex))
+                            return;
+                        Log.e(account.name + " Zoho REST", ex);
+                        if (ex instanceof ZohoApi.ApiException &&
+                                ApiNetworkHibernation.isRetryableApiFailure(ex)) {
+                            ApiNetworkHibernation.clearTransientWorkerState(db, account);
+                            rateLimitWait = true;
+                            long fallback = Math.min(Math.max(60 * 1000L, delay * 2), 60 * 60 * 1000L);
+                            delay = ZohoMutationRecovery.rateLimitDelayMs(
+                                    ((ZohoApi.ApiException) ex).retryAfterMs, fallback);
+                            rateLimitUntil = ZohoMutationRecovery.backoffUntil(
+                                    System.currentTimeMillis(), delay);
+                            account.backoff_until = rateLimitUntil;
+                            db.account().setAccountBackoff(account.id, rateLimitUntil);
+                        } else if (ApiNetworkHibernation.isTransportFailure(ex)) {
+                            ApiNetworkHibernation.clearTransientWorkerState(db, account);
+                            transportFailures++;
+                            delay = ApiNetworkHibernation.getTransportRetryDelayMs(transportFailures);
+                            EntityLog.log(this, EntityLog.Type.Network,
+                                    "Zoho REST transient transport failure; retry in " + delay + " ms");
+                        } else {
+                            EntityFolder inbox = db.folder().getFolderByType(account.id, EntityFolder.INBOX);
+                            if (inbox != null) {
+                                db.folder().setFolderError(inbox.id, Log.formatThrowable(ex));
+                                db.folder().setFolderState(inbox.id, null);
+                            }
+                            db.account().setAccountError(account.id, Log.formatThrowable(ex));
+                            db.account().setAccountState(account.id, null);
+                            delay = Math.min(Math.max(60 * 1000L, delay * 2), 60 * 60 * 1000L);
+                        }
+                        waitDelay = delay;
+                    }
+                } finally {
+                    if (wakeLock.isHeld())
+                        wakeLock.release();
+                }
+
+                if (state.isRunning()) {
+                    if (rateLimitWait)
+                        state.acquireRateLimitWait(waitDelay);
+                    else
+                        state.acquire(waitDelay, false);
+                }
+            }
+        } catch (InterruptedException ex) {
+            if (state.isRunning())
+                Log.i(account.name + " Zoho REST wait interrupted");
+        } finally {
+            if (wakeLock.isHeld())
+                wakeLock.release();
+            if (currentThread.equals(db.account().getAccountThread(account.id))) {
+                db.account().setAccountState(account.id, null);
+                db.account().setAccountThread(account.id, null);
+            }
+        }
+    }
+
+    private ZohoReceiver.SyncResult syncRequestedZohoFolder(DB db, EntityAccount account,
+                                                            ZohoApi api, Core.State state)
+            throws IOException, org.json.JSONException, MessagingException,
+            OperationCanceledException {
+        java.util.List<ZohoFolderPageBatch.Request> pending = new java.util.ArrayList<>();
+        final int[] imported = new int[]{0};
+        final int[] pages = new int[]{0};
+        final int[] operations = new int[]{0};
+        final java.util.Set<Long> processedFolders = new java.util.HashSet<>();
+        for (EntityOperation operation : db.operation().getOperations(account.id, EntityOperation.SYNC)) {
+            if (operation.folder == null) {
+                db.operation().deleteOperation(operation.id);
+                continue;
+            }
+            EntityFolder folder = db.folder().getFolder(operation.folder);
+            if (folder == null || TextUtils.isEmpty(folder.zoho_folder_id)) {
+                db.operation().deleteOperation(operation.id);
+                if (folder != null) {
+                    db.folder().setFolderSyncState(folder.id, null);
+                    db.folder().setFolderState(folder.id, null);
+                }
+                continue;
+            }
+            boolean olderPage = ZohoReceiver.isOlderPageRequest(operation.args);
+            if (!NativeApiSyncRequest.shouldProcessNativeFolderSync(
+                    ZohoReceiver.isRequestedFolderSync(folder), olderPage)) {
+                db.operation().deleteOperation(operation.id);
+                continue;
+            }
+            if (!olderPage) {
+                db.folder().setFolderState(folder.id, "connecting");
+                ZohoReceiver.SyncResult result = ZohoReceiver.syncRequestedFolderHead(
+                        ServiceSynchronize.this, db, account, api, state, folder);
+                db.operation().deleteOperation(operation.id);
+                if (db.operation().getOperationCount(folder.id, EntityOperation.SYNC) == 0)
+                    db.folder().setFolderSyncState(folder.id, null);
+                db.folder().setFolderError(folder.id, null);
+                db.folder().setFolderState(folder.id, "connected");
+                db.folder().setFolderLastSync(folder.id, System.currentTimeMillis());
+                imported[0] += result.imported;
+                pages[0] += result.pages;
+                operations[0]++;
+                processedFolders.add(folder.id);
+                continue;
+            }
+            pending.add(new ZohoFolderPageBatch.Request(operation.id, folder.id,
+                    !ZohoReceiver.isFolderPageExhausted(folder)));
+        }
+
+        ZohoFolderPageBatch.Selection selection = ZohoFolderPageBatch.select(
+                pending, ZohoFolderPageBatch.MAX_PAGES_PER_PASS);
+        // Keep one durable operation per selected folder; duplicate queue rows must not
+        // issue the same remote page more than once in this pass.
+        for (ZohoFolderPageBatch.Request duplicate : selection.duplicates)
+            db.operation().deleteOperation(duplicate.operationId);
+
+        ZohoFolderPageBatch.drain(selection.requests, new ZohoFolderPageBatch.Processor() {
+            @Override
+            public boolean process(ZohoFolderPageBatch.Request request)
+                    throws IOException, org.json.JSONException, MessagingException,
+                    OperationCanceledException {
+                EntityOperation operation = db.operation().getOperation(request.operationId);
+                EntityFolder folder = db.folder().getFolder(request.folderId);
+                if (operation == null)
+                    return true;
+                if (folder == null || TextUtils.isEmpty(folder.zoho_folder_id)) {
+                    db.operation().deleteOperation(operation.id);
+                    if (folder != null) {
+                        db.folder().setFolderSyncState(folder.id, null);
+                        db.folder().setFolderState(folder.id, null);
+                    }
+                    return true;
+                }
+                boolean olderPage = ZohoReceiver.isOlderPageRequest(operation.args);
+                if (!NativeApiSyncRequest.shouldProcessNativeFolderSync(
+                        ZohoReceiver.isRequestedFolderSync(folder), olderPage)) {
+                    db.operation().deleteOperation(operation.id);
+                    return true;
+                }
+
+                db.folder().setFolderState(folder.id, "connecting");
+                ZohoReceiver.SyncResult result = ZohoReceiver.syncFolderPage(
+                        ServiceSynchronize.this, db, account, api, state, folder);
+                // Delete only the completed row. If a fresh request was queued while
+                // this page ran, keep its requested marker for the next bounded pass.
+                db.operation().deleteOperation(operation.id);
+                if (db.operation().getOperationCount(folder.id, EntityOperation.SYNC) == 0)
+                    db.folder().setFolderSyncState(folder.id, null);
+                db.folder().setFolderError(folder.id, null);
+                db.folder().setFolderState(folder.id, "connected");
+                db.folder().setFolderLastSync(folder.id, System.currentTimeMillis());
+                imported[0] += result.imported;
+                pages[0] += result.pages;
+                operations[0]++;
+                processedFolders.add(folder.id);
+                return true;
+            }
+        });
+
+        boolean morePending = hasRequestedZohoFolderSync(db, account.id);
+        if (operations[0] == 0 && !morePending)
+            return null;
+        return new ZohoReceiver.SyncResult(imported[0], morePending,
+                "folder-batch-" + pages[0], pages[0], null, processedFolders);
+    }
+
+    private static boolean hasRequestedZohoFolderSync(DB db, long accountId) {
+        for (EntityOperation operation : db.operation().getOperations(accountId, EntityOperation.SYNC))
+            if (operation.folder != null) {
+                EntityFolder folder = db.folder().getFolder(operation.folder);
+                if (ZohoReceiver.isRequestedFolderSync(folder))
+                    return true;
+            }
+        return NativeApiContentOperations.hasPending(db, accountId);
+    }
+
     private void monitorAccount(
             final EntityAccount account, final Core.State state,
             final boolean sync, final boolean force) throws NoSuchProviderException {
+        if (account != null && account.isTestAccount(this))
+            return;
+
+        if (account != null && account.isGraphApi()) {
+            monitorGraphAccount(account, state);
+            return;
+        }
+
+        if (account != null && account.isZohoApi()) {
+            monitorZohoAccount(account, state);
+            return;
+        }
+
+        if (account != null && account.isGmail()) {
+            if (account.isGmailApi()) {
+                monitorGmailAccount(account, state);
+                return;
+            }
+            MessagingException ex = new MessagingException(
+                    getString(R.string.title_setup_gmail_api_only));
+            DB db = DB.getInstance(this);
+            db.account().setAccountError(account.id, Log.formatThrowable(ex));
+            db.account().setAccountState(account.id, null);
+            try {
+                NotificationManager nm = Helper.getSystemService(this, NotificationManager.class);
+                if (NotificationHelper.areNotificationsEnabled(nm))
+                    nm.notify("receive:" + account.id, NotificationHelper.NOTIFICATION_TAGGED,
+                            Core.getNotificationError(this, "error", account, null, null, ex).build());
+            } catch (Throwable notifyError) {
+                Log.w(notifyError);
+            }
+            EntityLog.log(this, EntityLog.Type.Account, account,
+                    "Legacy Gmail transport blocked auth_type=" + account.auth_type +
+                            " protocol=" + account.protocol +
+                            "; cached messages retained until Gmail API reauthorization");
+            return;
+        }
+
         final PowerManager pm = Helper.getSystemService(this, PowerManager.class);
         final PowerManager.WakeLock wlAccount = pm.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK, BuildConfig.APPLICATION_ID + ":account." + account.id);
@@ -1630,9 +2605,6 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
                 PowerManager.PARTIAL_WAKE_LOCK, BuildConfig.APPLICATION_ID + ":account." + account.id + ".folder");
         final PowerManager.WakeLock wlMessage = pm.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK, BuildConfig.APPLICATION_ID + ":account." + account.id + ".message");
-
-        if (account != null && account.isTestAccount(this))
-            return;
 
         long start = new Date().getTime();
         try {
@@ -3587,9 +4559,14 @@ public class ServiceSynchronize extends ServiceBase implements SharedPreferences
     }
 
     static void eval(Context context, String reason) {
+        eval(context, null, reason);
+    }
+
+    static void eval(Context context, Long account, String reason) {
         start(context,
                 new Intent(context, ServiceSynchronize.class)
                         .setAction("eval")
+                        .putExtra("account", account == null ? -1 : account)
                         .putExtra("reason", reason));
     }
 

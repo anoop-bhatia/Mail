@@ -330,14 +330,29 @@
 
                 <eu.faircode.email.EditTextPlain
                     android:id="@+id/etUser"
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:autofillHints="username"
                     android:hint="@string/title_user_hint"
                     android:inputType="text"
                     android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+                    app:layout_constraintEnd_toStartOf="@id/btnReauthorize"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tvUser" />
+
+                <ImageButton
+                    android:id="@+id/btnReauthorize"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/title_account_reauthorize"
+                    android:src="@drawable/twotone_edit_24"
+                    android:visibility="gone"
+                    app:layout_constraintBottom_toBottomOf="@id/etUser"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="@id/etUser"
+                    app:tint="?android:attr/textColorSecondary" />
 
                 <!-- password -->
 
@@ -1347,6 +1362,18 @@
                 tvJunk,spJunk,
                 vSeparatorSwipe,tvLeft,spLeft,tvRight,spRight,
                 vSeparatorMove,tvMove,spMove" />
+
+        <androidx.constraintlayout.widget.Group
+            android:id="@+id/grpFolderRoles"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone"
+            app:constraint_referenced_ids="
+                tvDrafts,spDrafts,tvDraftsRemark,
+                tvSent,spSent,
+                tvArchive,spArchive,
+                tvTrash,spTrash,
+                tvJunk,spJunk" />
 
         <androidx.constraintlayout.widget.Group
             android:id="@+id/grpError"

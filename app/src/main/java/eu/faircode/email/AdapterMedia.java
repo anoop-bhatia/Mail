@@ -453,7 +453,7 @@ public class AdapterMedia extends RecyclerView.Adapter<AdapterMedia.ViewHolder> 
                                 if (account == null)
                                     return null;
 
-                                if (account.protocol == EntityAccount.TYPE_IMAP && message.uid == null)
+                                if (NativeApiContentOperations.hasMissingLegacyImapUid(account, message))
                                     return null;
 
                                 if (!"connected".equals(account.state) && !account.isTransient(context))

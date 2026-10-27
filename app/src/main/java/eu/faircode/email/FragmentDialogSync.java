@@ -111,15 +111,23 @@ public class FragmentDialogSync extends FragmentDialogBase {
                                 try {
                                     db.beginTransaction();
 
-                                    List<EntityFolder> folders;
-                                    if (fid < 0)
-                                        folders = db.folder().getFoldersUnified(type, false);
-                                    else {
+                                    List<EntityFolder> folders = new ArrayList<>();
+                                    long[] selected = args.getLongArray(FetchMoreAction.ARG_LEGACY_FOLDERS);
+                                    if (selected != null) {
+                                        for (long selectedId : selected) {
+                                            EntityFolder folder = db.folder().getFolder(selectedId);
+                                            if (folder != null)
+                                                folders.add(folder);
+                                        }
+                                    } else if (fid < 0) {
+                                        List<EntityFolder> unified = db.folder().getFoldersUnified(type, false);
+                                        if (unified != null)
+                                            folders.addAll(unified);
+                                    } else {
                                         EntityFolder folder = db.folder().getFolder(fid);
                                         if (folder == null)
                                             return null;
 
-                                        folders = new ArrayList<>();
                                         folders.add(folder);
 
                                         if (children) {
@@ -130,15 +138,18 @@ public class FragmentDialogSync extends FragmentDialogBase {
 
                                     for (EntityFolder folder : folders)
                                         if (folder.selectable) {
-                                            if (months == 0) {
-                                                db.folder().setFolderInitialize(folder.id, Integer.MAX_VALUE);
-                                                db.folder().setFolderKeep(folder.id, Integer.MAX_VALUE);
-                                            } else if (months > 0) {
-                                                db.folder().setFolderInitialize(folder.id, months * 30);
-                                                db.folder().setFolderKeep(folder.id, months * 30);
+                                            EntityAccount account = (folder.account == null ? null : db.account().getAccount(folder.account));
+                                            if (account != null && account.isNativeRestApi()) {
+                                                EntityOperation.syncMore(context, folder.id, true);
+                                                continue;
                                             }
 
-                                            EntityOperation.sync(context, folder.id, true);
+                                            Integer days = FetchMoreRouting.getKeepDays(months);
+                                            if (days != null) {
+                                                db.folder().setFolderInitialize(folder.id, days);
+                                                db.folder().setFolderKeep(folder.id, days);
+                                            }
+                                            EntityOperation.syncMore(context, folder.id, true);
                                         }
 
                                     db.setTransactionSuccessful();

@@ -129,6 +129,15 @@ public interface DaoAccount {
             ", SUM(folder.synchronize) AS folders" +
             ", (SELECT COUNT(id) FROM operation" +
             "  WHERE operation.account = account.id AND operation.name <> '" + EntityOperation.SEND + "') AS operations" +
+            ", (SELECT COUNT(id) FROM operation" +
+            "  WHERE operation.account = account.id AND operation.name IN (" +
+            EntityOperation.GRAPH_API_WRITE_NAMES_SQL + ")) AS graph_write_operations" +
+            ", (SELECT COUNT(operation.id) FROM operation" +
+            "  LEFT JOIN folder ON folder.id = operation.folder" +
+            "  WHERE operation.account = account.id AND (operation.name IN (" +
+            EntityOperation.ZOHO_API_WRITE_NAMES_SQL + ") OR" +
+            "   (operation.name = '" + EntityOperation.SYNC + "' AND folder.sync_state = 'requested')))" +
+            " AS zoho_wakeup_operations" +
             " FROM account" +
             " LEFT JOIN folder ON folder.account = account.id" +
             " GROUP BY account.id" +
@@ -308,7 +317,17 @@ public interface DaoAccount {
             " WHERE id = :id")
     int setAccountLastModified(long id, Long last_modified);
 
+    @Query("UPDATE account" +
+            " SET gmail_history_id = :historyId" +
+            ", gmail_full_sync_history_id = :fullSyncHistoryId" +
+            ", gmail_full_sync_page_token = :fullSyncPageToken" +
+            ", gmail_history_page_token = :historyPageToken" +
+            ", gmail_history_pending = :historyPending" +
+            " WHERE id = :id")
+    int setGmailSyncState(long id, String historyId, String fullSyncHistoryId,
+                          String fullSyncPageToken, String historyPageToken,
+                          String historyPending);
+
     @Query("DELETE FROM account WHERE id = :id")
     int deleteAccount(long id);
 }
-

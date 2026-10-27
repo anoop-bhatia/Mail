@@ -480,9 +480,21 @@
                             android:layout_marginStart="6dp"
                             android:text="@string/title_pop3"
                             android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                            app:layout_constraintEnd_toStartOf="@+id/guideline_center"
+                            app:layout_constraintEnd_toStartOf="@+id/tvApiReceive"
                             app:layout_constraintHorizontal_chainStyle="packed"
                             app:layout_constraintStart_toEndOf="@id/tvImap"
+                            app:layout_constraintTop_toBottomOf="@id/tvAccount" />
+
+                        <TextView
+                            android:id="@+id/tvApiReceive"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:text="@string/title_setup_api"
+                            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+                            app:layout_constraintEnd_toStartOf="@+id/guideline_center"
+                            app:layout_constraintHorizontal_chainStyle="packed"
+                            app:layout_constraintStart_toEndOf="@id/tvPop"
                             app:layout_constraintTop_toBottomOf="@id/tvAccount" />
 
                         <Button
@@ -517,9 +529,21 @@
                             android:layout_height="wrap_content"
                             android:text="@string/title_smtp"
                             android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                            app:layout_constraintEnd_toStartOf="@+id/tvAliases"
+                            app:layout_constraintEnd_toStartOf="@+id/tvApiSend"
                             app:layout_constraintHorizontal_chainStyle="packed"
                             app:layout_constraintStart_toEndOf="@id/guideline_center"
+                            app:layout_constraintTop_toBottomOf="@id/tvIdentity" />
+
+                        <TextView
+                            android:id="@+id/tvApiSend"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:text="@string/title_setup_api"
+                            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+                            app:layout_constraintEnd_toStartOf="@+id/tvAliases"
+                            app:layout_constraintHorizontal_chainStyle="packed"
+                            app:layout_constraintStart_toEndOf="@id/tvSmtp"
                             app:layout_constraintTop_toBottomOf="@id/tvIdentity" />
 
                         <TextView
@@ -531,7 +555,7 @@
                             android:textAppearance="@style/TextAppearance.AppCompat.Small"
                             app:layout_constraintEnd_toEndOf="parent"
                             app:layout_constraintHorizontal_chainStyle="packed"
-                            app:layout_constraintStart_toEndOf="@id/tvSmtp"
+                            app:layout_constraintStart_toEndOf="@id/tvApiSend"
                             app:layout_constraintTop_toBottomOf="@id/tvIdentity" />
 
                         <androidx.constraintlayout.widget.Barrier
@@ -539,7 +563,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             app:barrierDirection="bottom"
-                            app:constraint_referenced_ids="tvImap,tvPop,tvSmtp,tvAliases" />
+                            app:constraint_referenced_ids="tvImap,tvPop,tvApiReceive,tvSmtp,tvApiSend,tvAliases" />
 
                         <TextView
                             android:id="@+id/tvAccountIdentity"

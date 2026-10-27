@@ -6,6 +6,19 @@ plugins {
 def getVersionCode = { -> return 2338 }
 def getRevision = { -> return "a" }
 def getReleaseName = { -> return "Elopteryx" }
+def getGitCommit = { ->
+    try {
+        String requested = providers.gradleProperty("sourceCommit").orNull
+        String value = (requested == null ? providers.exec {
+            workingDir rootProject.projectDir
+            commandLine "git", "rev-parse", "--verify", "HEAD"
+        }.standardOutput.asText.get() : requested).trim()
+        return (value.matches("[0-9a-fA-F]{40}")
+                ? value.toLowerCase(Locale.ROOT) : "unknown")
+    } catch (Exception ignored) {
+        return "unknown"
+    }
+}
 // https://en.wikipedia.org/wiki/List_of_dinosaur_genera
 
 def keystoreProperties = new Properties()
@@ -15,6 +28,8 @@ if (rootProject.file("keystore.properties").exists())
 Properties localProperties = new Properties()
 if (rootProject.file("local.properties").exists())
     localProperties.load(new FileInputStream(rootProject.file("local.properties")))
+
+def zohoAuthorizationServer = project.hasProperty("zohoAuthorizationServer") ? project.property("zohoAuthorizationServer").toString() : localProperties.getProperty("zohoAuthorizationServer", "https://accounts.zoho.com")
 
 android {
     //compileSdkExtension 4 // https://developer.android.com/guide/sdk-extensions
@@ -35,7 +50,9 @@ android {
         manifestPlaceholders = [namespace: applicationId.replace('.debug', '')]
 
         buildConfigField "String", "REVISION", "\"" + getRevision() + "\""
+        buildConfigField "String", "GIT_COMMIT", "\"" + getGitCommit() + "\""
         buildConfigField "String", "RELEASE_NAME", "\"" + getReleaseName() + "\""
+        buildConfigField "String", "ZOHO_AUTHORIZATION_SERVER", groovy.json.JsonOutput.toJson(zohoAuthorizationServer.toString())
 
         javaCompileOptions {
             annotationProcessorOptions {
@@ -69,16 +86,16 @@ android {
 
     sourceSets {
         github {
-            java.srcDirs = ['src/main/java', 'src/github/java', 'src/extra/java']
+            java.srcDirs = ['src/main/java', 'src/github/java', 'src/gms/java', 'src/extra/java']
         }
         large {
-            java.srcDirs = ['src/main/java', 'src/github/java', 'src/extra/java']
+            java.srcDirs = ['src/main/java', 'src/github/java', 'src/gms/java', 'src/extra/java']
         }
         fdroid {
             java.srcDirs = ['src/main/java', 'src/fdroid/java', 'src/extra/java']
         }
         play {
-            java.srcDirs = ['src/main/java', 'src/play/java', 'src/dummy/java']
+            java.srcDirs = ['src/main/java', 'src/play/java', 'src/gms/java', 'src/dummy/java']
         }
         amazon {
             java.srcDirs = ['src/main/java', 'src/amazon/java', 'src/extra/java']
@@ -566,6 +583,7 @@ dependencies {
     def colorpicker_version = "0.0.15"
     def overscroll_version = "1.1.1"
     def appauth_version = "0.11.1"
+    def playservicesauth_version = "21.2.0"
     def jcharset_version = "2.1"
     def apache_poi = "3.17" // Do not update
     def outlook_parser_version = "1.7.13" // Do not update
@@ -707,10 +725,16 @@ dependencies {
     githubImplementation "com.google.android.gms:play-services-basement:$playservicesbasement_version"
     largeImplementation "com.google.android.gms:play-services-basement:$playservicesbasement_version"
     playImplementation "com.google.android.gms:play-services-basement:$playservicesbasement_version"
+    githubImplementation "com.google.android.gms:play-services-auth:$playservicesauth_version"
+    largeImplementation "com.google.android.gms:play-services-auth:$playservicesauth_version"
+    playImplementation "com.google.android.gms:play-services-auth:$playservicesauth_version"
 
     // https://github.com/appmattus/certificatetransparency
     // https://mvnrepository.com/artifact/com.appmattus.certificatetransparency/certificatetransparency-android
     implementation "com.appmattus.certificatetransparency:certificatetransparency-android:$transparency_version"
+
+    // Microsoft Graph message updates require literal PATCH; HttpURLConnection does not support it.
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
 
     // https://developer.amazon.com/docs/in-app-purchasing/iap-get-started.html
     amazonImplementation files('lib/in-app-purchasing-2.0.76.jar')
@@ -871,4 +895,9 @@ dependencies {
 
     // https://developer.android.com/jetpack/androidx/releases/heifwriter
     implementation "androidx.heifwriter:heifwriter:$heifwriter_version"
+
+    // Gmail REST wire-format tests
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "org.json:json:20240303"
+    testImplementation "org.xerial:sqlite-jdbc:3.45.3.0"
 }

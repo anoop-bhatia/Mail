@@ -272,7 +272,10 @@ public class ServiceUI extends IntentService {
             if (message == null)
                 return;
 
-            EntityOperation.queue(this, message, EntityOperation.DELETE);
+            EntityAccount account = db.account().getAccount(message.account);
+            // Notification deletes remain reversible; Gmail Permanent Delete is only
+            // dispatched from an explicitly confirmed in-app action.
+            EntityOperation.queue(this, message, GmailMailMutator.getDeleteOperation(account, false));
 
             db.setTransactionSuccessful();
         } finally {

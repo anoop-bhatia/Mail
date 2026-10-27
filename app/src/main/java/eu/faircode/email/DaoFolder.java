@@ -37,7 +37,7 @@ public interface DaoFolder {
     List<EntityFolder> getFolders(long account, boolean writable, boolean selectable);
 
     @Query("SELECT folder.*" +
-            ", account.id AS accountId, account.pop AS accountProtocol, account.`order` AS accountOrder" +
+            ", account.id AS accountId, account.pop AS accountProtocol, account.auth_type AS accountAuthType, account.provider AS accountProvider, account.`order` AS accountOrder" +
             ", account.name AS accountName, account.category AS accountCategory, account.color AS accountColor" +
             ", account.state AS accountState, account.error AS accountError" +
             ", COUNT(DISTINCT CASE WHEN rule.enabled THEN rule.id ELSE NULL END) rules" +
@@ -49,7 +49,7 @@ public interface DaoFolder {
             ", COUNT(DISTINCT CASE WHEN operation.state = 'executing' THEN operation.id ELSE NULL END) AS executing" +
             " FROM folder" +
             " LEFT JOIN account ON account.id = folder.account" +
-            " LEFT JOIN message ON message.folder = folder.id AND NOT message.ui_hide" +
+            " LEFT JOIN message ON " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER + " AND NOT message.ui_hide" +
             " LEFT JOIN rule ON rule.folder = folder.id" +
             " LEFT JOIN operation ON operation.folder = folder.id" +
             " WHERE folder.account = :account AND account.synchronize" +
@@ -66,6 +66,7 @@ public interface DaoFolder {
     @Query("SELECT folder.* FROM folder" +
             " JOIN account ON account.id = folder.account" +
             " WHERE folder.id = :folder" +
+            " AND (account.auth_type IS NULL OR account.auth_type <> " + ServiceAuthenticator.AUTH_TYPE_GMAIL + ")" +
             " AND (:search OR (account.synchronize AND account.browse AND account.pop = " + EntityAccount.TYPE_IMAP + "))")
     EntityFolder getBrowsableFolder(long folder, boolean search);
 
@@ -78,7 +79,7 @@ public interface DaoFolder {
 
     @Transaction
     @Query("SELECT folder.*" +
-            ", account.id AS accountId, account.pop AS accountProtocol, account.`order` AS accountOrder" +
+            ", account.id AS accountId, account.pop AS accountProtocol, account.auth_type AS accountAuthType, account.provider AS accountProvider, account.`order` AS accountOrder" +
             ", account.name AS accountName, account.category AS accountCategory, account.color AS accountColor" +
             ", account.state AS accountState, account.error AS accountError" +
             ", COUNT(DISTINCT CASE WHEN rule.enabled THEN rule.id ELSE NULL END) rules" +
@@ -90,7 +91,7 @@ public interface DaoFolder {
             ", COUNT(DISTINCT CASE WHEN operation.state = 'executing' THEN operation.id ELSE NULL END) AS executing" +
             " FROM folder" +
             " JOIN account ON account.id = folder.account" +
-            " LEFT JOIN message ON message.folder = folder.id" +
+            " LEFT JOIN message ON " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER +
             " LEFT JOIN rule ON rule.folder = folder.id" +
             " LEFT JOIN operation ON operation.folder = folder.id" +
             " WHERE CASE WHEN :primary THEN account.`primary` ELSE" +
@@ -103,7 +104,7 @@ public interface DaoFolder {
     LiveData<List<TupleFolderEx>> liveFolders(Long account, boolean primary);
 
     final String queryUnified = "SELECT folder.*" +
-            ", account.id AS accountId, account.pop AS accountProtocol, account.`order` AS accountOrder" +
+            ", account.id AS accountId, account.pop AS accountProtocol, account.auth_type AS accountAuthType, account.provider AS accountProvider, account.`order` AS accountOrder" +
             ", account.name AS accountName, account.category AS accountCategory, account.color AS accountColor" +
             ", account.state AS accountState, account.error AS accountError" +
             ", COUNT(DISTINCT CASE WHEN rule.enabled THEN rule.id ELSE NULL END) rules" +
@@ -115,7 +116,7 @@ public interface DaoFolder {
             ", COUNT(DISTINCT CASE WHEN operation.state = 'executing' THEN operation.id ELSE NULL END) AS executing" +
             " FROM folder" +
             " JOIN account ON account.id = folder.account" +
-            " LEFT JOIN message ON message.folder = folder.id AND NOT message.ui_hide" +
+            " LEFT JOIN message ON " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER + " AND NOT message.ui_hide" +
             " LEFT JOIN rule ON rule.folder = folder.id" +
             " LEFT JOIN operation ON operation.folder = folder.id" +
             " WHERE account.`synchronize`" +
@@ -138,7 +139,7 @@ public interface DaoFolder {
     LiveData<List<TupleFolderSync>> liveSynchronizing();
 
     @Query("SELECT folder.*" +
-            ", account.id AS accountId, account.pop AS accountProtocol, account.`order` AS accountOrder" +
+            ", account.id AS accountId, account.pop AS accountProtocol, account.auth_type AS accountAuthType, account.provider AS accountProvider, account.`order` AS accountOrder" +
             ", account.name AS accountName, account.category AS accountCategory, account.color AS accountColor" +
             ", account.state AS accountState, account.error AS accountError" +
             ", COUNT(DISTINCT CASE WHEN rule.enabled THEN rule.id ELSE NULL END) rules" +
@@ -150,7 +151,7 @@ public interface DaoFolder {
             ", COUNT(DISTINCT CASE WHEN operation.state = 'executing' THEN operation.id ELSE NULL END) AS executing" +
             " FROM folder" +
             " LEFT JOIN account ON account.id = folder.account" +
-            " LEFT JOIN message ON message.folder = folder.id AND NOT message.ui_hide" +
+            " LEFT JOIN message ON " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER + " AND NOT message.ui_hide" +
             " LEFT JOIN rule ON rule.folder = folder.id" +
             " LEFT JOIN operation ON operation.folder = folder.id" +
             " WHERE folder.id = :id" +
@@ -200,7 +201,7 @@ public interface DaoFolder {
             ", folder.color, COUNT (DISTINCT folder.color) AS colorCount" +
             " FROM folder" +
             " LEFT JOIN account ON account.id = folder.account" +
-            " LEFT JOIN message ON message.folder = folder.id AND NOT message.ui_hide" +
+            " LEFT JOIN message ON " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER + " AND NOT message.ui_hide" +
             " WHERE (account.id IS NULL OR account.synchronize)" +
             " AND ((folder.type <> '" + EntityFolder.SYSTEM + "'" +
             " AND folder.type <> '" + EntityFolder.USER + "')" +
@@ -241,6 +242,18 @@ public interface DaoFolder {
     @Query("SELECT folder.* FROM folder" +
             " WHERE account = :account AND type = :type")
     EntityFolder getFolderByType(long account, String type);
+
+    @Query("SELECT folder.* FROM folder" +
+            " WHERE account = :account AND gmail_label_id = :gmail_label_id")
+    EntityFolder getFolderByGmailLabelId(long account, String gmail_label_id);
+
+    @Query("SELECT folder.* FROM folder" +
+            " WHERE account = :account AND zoho_folder_id = :zoho_folder_id")
+    EntityFolder getFolderByZohoId(long account, String zoho_folder_id);
+
+    @Query("SELECT folder.* FROM folder" +
+            " WHERE account = :account AND graph_folder_id = :graph_folder_id")
+    EntityFolder getFolderByGraphId(long account, String graph_folder_id);
 
     @Query("SELECT folder.* FROM folder" +
             " JOIN account ON account.id = folder.account" +
@@ -325,6 +338,24 @@ public interface DaoFolder {
 
     @Query("UPDATE folder SET type = :type WHERE id = :id AND NOT (type IS :type)")
     int setFolderType(long id, String type);
+
+    @Query("UPDATE folder SET gmail_label_id = :gmail_label_id WHERE id = :id AND NOT (gmail_label_id IS :gmail_label_id)")
+    int setFolderGmailLabelId(long id, String gmail_label_id);
+
+    @Query("UPDATE folder SET gmail_page_token = :token WHERE id = :id AND NOT (gmail_page_token IS :token)")
+    int setFolderGmailPageToken(long id, String token);
+
+    @Query("UPDATE folder SET zoho_page_start = :start WHERE id = :id AND NOT (zoho_page_start IS :start)")
+    int setFolderZohoPageStart(long id, int start);
+
+    @Query("UPDATE folder SET zoho_recent_page_start = :start WHERE id = :id AND NOT (zoho_recent_page_start IS :start)")
+    int setFolderZohoRecentPageStart(long id, Integer start);
+
+    @Query("UPDATE folder SET zoho_recent_scan_head_id = :messageId WHERE id = :id AND NOT (zoho_recent_scan_head_id IS :messageId)")
+    int setFolderZohoRecentScanHead(long id, String messageId);
+
+    @Query("UPDATE folder SET zoho_recent_boundary_id = :messageId WHERE id = :id AND NOT (zoho_recent_boundary_id IS :messageId)")
+    int setFolderZohoRecentBoundary(long id, String messageId);
 
     @Query("UPDATE folder SET color = :color WHERE id = :id AND NOT (color IS :color)")
     int setFolderColor(long id, Integer color);

@@ -46,6 +46,7 @@ public interface DaoMessage {
     @Transaction
     @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query("SELECT message.*" +
+            ", " + GmailLabelFolder.SQL_LABEL_DISPLAY_DATA + " AS gmailLabelDisplayData" +
             ", account.pop AS accountProtocol, account.name AS accountName, account.category AS accountCategory, COALESCE(identity.color, folder.color, account.color) AS accountColor" +
             ", account.notify AS accountNotify, account.summary AS accountSummary, account.leave_on_server AS accountLeaveOnServer, account.leave_deleted AS accountLeaveDeleted, account.auto_seen AS accountAutoSeen" +
             ", folder.name AS folderName, folder.color AS folderColor, folder.display AS folderDisplay, folder.type AS folderType, NULL AS folderInheritedType, folder.unified AS folderUnified, folder.read_only AS folderReadOnly" +
@@ -53,6 +54,7 @@ public interface DaoMessage {
             ", '[' || substr(group_concat(message.`from`, ','), 0, 2048) || ']' AS senders" +
             ", '[' || substr(group_concat(message.`to`, ','), 0, 2048) || ']' AS recipients" +
             ", COUNT(message.id) AS count" +
+            ", MAX(CASE WHEN message.gmail_id IS NOT NULL AND message.ui_busy IS NOT NULL THEN 1 ELSE 0 END) AS gmail_action_pending" +
             ", SUM(1 - message.ui_seen) AS unseen" +
             ", SUM(1 - message.ui_flagged) AS unflagged" +
             ", SUM(folder.type = '" + EntityFolder.DRAFTS + "') AS drafts" +
@@ -79,6 +81,7 @@ public interface DaoMessage {
             " LEFT JOIN identity_view AS identity ON identity.id = message.identity" +
             " JOIN folder_view AS folder ON folder.id = message.folder" +
             " WHERE account.`synchronize`" +
+            " AND (folder.gmail_label_id IS NULL OR message.gmail_id IS NULL OR " + GmailLabelFolder.SQL_MATCH_MESSAGE_FOLDER + ")" +
             " AND (:category IS NULL OR account.category = :category)" +
             " AND (:threading OR (:type IS NULL AND (folder.unified OR :found)) OR (:type IS NOT NULL AND folder.type = :type))" +
             " AND (NOT message.ui_hide OR :debug)" +
@@ -128,16 +131,25 @@ public interface DaoMessage {
     @Transaction
     @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query("SELECT message.*" +
+            ", " + GmailLabelFolder.SQL_LABEL_DISPLAY_DATA + " AS gmailLabelDisplayData" +
             ", account.pop AS accountProtocol, account.name AS accountName, account.category AS accountCategory, COALESCE(identity.color, folder.color, account.color) AS accountColor" +
             ", account.notify AS accountNotify, account.summary AS accountSummary, account.leave_on_server AS accountLeaveOnServer, account.leave_deleted AS accountLeaveDeleted, account.auto_seen AS accountAutoSeen" +
-            ", folder.name AS folderName, folder.color AS folderColor, folder.display AS folderDisplay, folder.type AS folderType, f.inherited_type AS folderInheritedType, folder.unified AS folderUnified, folder.read_only AS folderReadOnly" +
+            ", CASE WHEN " + GmailLabelFolder.SQL_MATCH_MESSAGE_F + " THEN f.name ELSE folder.name END AS folderName" +
+            ", CASE WHEN " + GmailLabelFolder.SQL_MATCH_MESSAGE_F + " THEN f.color ELSE folder.color END AS folderColor" +
+            ", CASE WHEN " + GmailLabelFolder.SQL_MATCH_MESSAGE_F + " THEN f.display ELSE folder.display END AS folderDisplay" +
+            ", CASE WHEN " + GmailLabelFolder.SQL_MATCH_MESSAGE_F + " THEN f.type ELSE folder.type END AS folderType" +
+            ", CASE WHEN " + GmailLabelFolder.SQL_MATCH_MESSAGE_F + " THEN f.inherited_type ELSE folder.inherited_type END AS folderInheritedType" +
+            ", CASE WHEN " + GmailLabelFolder.SQL_MATCH_MESSAGE_F + " THEN f.unified ELSE folder.unified END AS folderUnified" +
+            ", CASE WHEN " + GmailLabelFolder.SQL_MATCH_MESSAGE_F + " THEN f.read_only ELSE folder.read_only END AS folderReadOnly" +
             ", IFNULL(identity.display, identity.name) AS identityName, identity.email AS identityEmail, identity.color AS identityColor, identity.synchronize AS identitySynchronize" +
             ", '[' || substr(group_concat(message.`from`, ','), 0, 2048) || ']' AS senders" +
             ", '[' || substr(group_concat(message.`to`, ','), 0, 2048) || ']' AS recipients" +
             ", COUNT(message.id) AS count" +
+            ", MAX(CASE WHEN message.gmail_id IS NOT NULL AND message.ui_busy IS NOT NULL THEN 1 ELSE 0 END) AS gmail_action_pending" +
             ", SUM(1 - message.ui_seen) AS unseen" +
             ", SUM(1 - message.ui_flagged) AS unflagged" +
-            ", SUM(folder.type = '" + EntityFolder.DRAFTS + "') AS drafts" +
+            ", SUM(CASE WHEN " + GmailLabelFolder.SQL_MATCH_MESSAGE_F +
+            " THEN f.type = '" + EntityFolder.DRAFTS + "' ELSE folder.type = '" + EntityFolder.DRAFTS + "' END) AS drafts" +
             ", COUNT(DISTINCT" +
             "   CASE WHEN NOT message.hash IS NULL THEN message.hash" +
             "   WHEN NOT message.msgid IS NULL THEN message.msgid" +
@@ -153,7 +165,7 @@ public interface DaoMessage {
             ", MAX(message.importance) AS ui_importance" +
             ", MAX(CASE WHEN" +
             "   (:found AND folder.type <> '" + EntityFolder.ARCHIVE + "')" +
-            "   OR (NOT :found AND folder.id = :folder)" +
+            "   OR (NOT :found AND " + GmailLabelFolder.SQL_MESSAGE_IN_TARGET_FOLDER + ")" +
             "   THEN message.received ELSE 0 END) AS dummy" +
             " FROM message" +
             " JOIN account_view AS account ON account.id = message.account" +
@@ -161,12 +173,13 @@ public interface DaoMessage {
             " JOIN folder_view AS folder ON folder.id = message.folder" +
             " JOIN folder_view AS f ON f.id = :folder" +
             " WHERE (message.account = f.account OR message.account = identity.account OR " + is_outbox + ")" +
-            " AND (:threading OR folder.id = :folder)" +
+            " AND (:threading OR " + GmailLabelFolder.SQL_MESSAGE_IN_TARGET_FOLDER + ")" +
+            " AND (message.gmail_id IS NULL OR " + GmailLabelFolder.SQL_MESSAGE_IN_TARGET_FOLDER + ")" +
             " AND (NOT message.ui_hide OR :debug)" +
             " AND (NOT :found OR message.ui_found = :found)" +
             " GROUP BY CASE WHEN message.thread IS NULL OR NOT :threading THEN message.id ELSE message.thread END" +
             " HAVING (SUM((:found AND message.ui_found)" +
-            " OR (NOT :found AND message.folder = :folder)) > 0)" +
+            " OR (NOT :found AND " + GmailLabelFolder.SQL_MESSAGE_IN_TARGET_FOLDER + ")) > 0)" +
             " AND SUM(NOT message.ui_hide OR :debug) > 0" +
             " AND (NOT (:filter_seen AND NOT :filter_unflagged) OR SUM(1 - message.ui_seen) > 0 OR " + is_outbox + ")" +
             " AND (NOT (:filter_unflagged AND NOT :filter_seen) OR COUNT(message.id) - SUM(1 - message.ui_flagged) > 0 OR " + is_outbox + ")" +
@@ -206,6 +219,7 @@ public interface DaoMessage {
 
     @Transaction
     @Query("SELECT message.*" +
+            ", " + GmailLabelFolder.SQL_LABEL_DISPLAY_DATA + " AS gmailLabelDisplayData" +
             ", account.pop AS accountProtocol, account.name AS accountName, account.category AS accountCategory, COALESCE(identity.color, folder.color, account.color) AS accountColor" +
             ", account.notify AS accountNotify, account.summary AS accountSummary, account.leave_on_server AS accountLeaveOnServer, account.leave_deleted AS accountLeaveDeleted, account.auto_seen AS accountAutoSeen" +
             ", folder.name AS folderName, folder.color AS folderColor, folder.display AS folderDisplay, folder.type AS folderType, NULL AS folderInheritedType, folder.unified AS folderUnified, folder.read_only AS folderReadOnly" +
@@ -251,6 +265,7 @@ public interface DaoMessage {
             " WHEN folder.type = '" + EntityFolder.USER + "' THEN 8" +
             " WHEN folder.type = '" + EntityFolder.ARCHIVE + "' THEN 9" +
             " ELSE 999 END")
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     DataSource.Factory<Integer, TupleMessageEx> pagedThread(
             long account, String thread, Long id,
             boolean filter_archive,
@@ -431,6 +446,7 @@ public interface DaoMessage {
             "  WHEN :type IS NOT NULL THEN folder.type = :type" +
             "  ELSE folder.unified" +
             " END" +
+            " AND " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER +
             " AND NOT ui_seen" +
             " AND (NOT :filter_unflagged OR message.ui_flagged)" +
             " AND (NOT :filter_unknown OR (message.avatar IS NOT NULL AND message.sender <> identity.email))" +
@@ -447,7 +463,8 @@ public interface DaoMessage {
             " AND thread = :thread" +
             " AND (:id IS NULL OR message.id = :id)" +
             " AND (:folder IS NULL OR message.folder = :folder)" +
-            " AND (NOT uid IS NULL OR account.pop <> " + EntityAccount.TYPE_IMAP + ")" +
+            " AND (NOT uid IS NULL OR account.pop <> " + EntityAccount.TYPE_IMAP +
+            " OR message.gmail_id IS NOT NULL OR message.zoho_id IS NOT NULL OR message.graph_id IS NOT NULL)" +
             " AND NOT ui_hide")
     List<EntityMessage> getMessagesByThread(long account, String thread, Long id, Long folder);
 
@@ -455,6 +472,54 @@ public interface DaoMessage {
             " WHERE (:account IS NULL OR account = :account)" +
             " AND msgid = :msgid")
     List<EntityMessage> getMessagesByMsgId(Long account, String msgid);
+
+    @Query("SELECT * FROM message" +
+            " WHERE account = :account" +
+            " AND gmail_id = :gmail_id")
+    EntityMessage getMessageByGmailId(long account, String gmail_id);
+
+    @Query("SELECT * FROM message" +
+            " WHERE account = :account" +
+            " AND gmail_id IS NOT NULL" +
+            " AND instr(' ' || IFNULL(labels, '') || ' ', ' ' || :labelId || ' ') > 0")
+    List<EntityMessage> getGmailMessagesByLabel(long account, String labelId);
+
+    @Query("SELECT * FROM message" +
+            " WHERE account = :account" +
+            " AND zoho_id = :zoho_id")
+    EntityMessage getMessageByZohoId(long account, String zoho_id);
+
+    @Query("SELECT zoho_id FROM message" +
+            " WHERE account = :account AND zoho_id IS NOT NULL" +
+            " AND instr(IFNULL(zoho_folder_ids, ''), '|' || :folderId || '|') > 0" +
+            " ORDER BY received DESC, id DESC LIMIT :limit")
+    List<String> getZohoRecentMessageIds(long account, String folderId, int limit);
+
+    @Query("SELECT * FROM message" +
+            " WHERE account = :account" +
+            " AND graph_id = :graph_id")
+    EntityMessage getMessageByGraphId(long account, String graph_id);
+
+    @Query("UPDATE message SET graph_id = :graph_id, thread = :thread WHERE id = :id AND graph_id IS NULL")
+    int setMessageGraphIdAndThread(long id, String graph_id, String thread);
+
+    @Query("UPDATE message SET thread = :thread WHERE id = :id AND NOT (thread IS :thread)")
+    int setMessageThread(long id, String thread);
+
+    @Query("UPDATE message SET zoho_folder_ids = :folder_ids WHERE id = :id")
+    int setMessageZohoFolderIds(long id, String folder_ids);
+
+    @Query("UPDATE message SET zoho_id = :zoho_id, zoho_folder_ids = :folder_ids " +
+            "WHERE id = :id AND zoho_id IS NULL")
+    int setMessageZohoId(long id, String zoho_id, String folder_ids);
+
+    @Query("UPDATE message SET gmail_id = :gmail_id, gmail_thread_id = :gmail_thread_id" +
+            " WHERE id = :id AND gmail_id IS NULL")
+    int setMessageGmailIds(long id, String gmail_id, String gmail_thread_id);
+
+    @Query("UPDATE message SET received = :received, gmail_received_checked = 1" +
+            " WHERE id = :id AND gmail_id IS NOT NULL")
+    int setMessageGmailReceived(long id, long received);
 
     @Query("SELECT message.* FROM message" +
             " JOIN folder ON folder.id = message.folder" +
@@ -475,8 +540,10 @@ public interface DaoMessage {
             " AND (:to IS NULL OR received IS NULL OR received < :to)")
     List<TupleThreadInfo> getThreadInfo(long account, List<String> msgids, Long from, Long to);
 
-    @Query("SELECT * FROM message" +
-            " WHERE folder = :folder" +
+    @Query("SELECT message.* FROM message" +
+            " JOIN folder ON folder.id = message.folder" +
+            " WHERE folder.id = :folder" +
+            " AND " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER +
             " AND sender = :sender")
     List<EntityMessage> getMessagesBySender(long folder, String sender);
 
@@ -509,6 +576,7 @@ public interface DaoMessage {
     @Query("SELECT COUNT(*) FROM message" +
             " JOIN folder_view AS folder ON folder.id = message.folder" +
             " WHERE message.id = :id" +
+            " AND " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER +
             " AND NOT message.ui_hide" +
             " AND (NOT :filter_seen OR NOT message.ui_seen)" +
             " AND (NOT :filter_unflagged OR message.ui_flagged)" +
@@ -548,6 +616,7 @@ public interface DaoMessage {
     int countNotifying(long folder);
 
     String FETCH_MESSAGE = "SELECT message.*" +
+            ", " + GmailLabelFolder.SQL_LABEL_DISPLAY_DATA + " AS gmailLabelDisplayData" +
             ", account.pop AS accountProtocol, account.name AS accountName, account.category AS accountCategory, identity.color AS accountColor" +
             ", account.notify AS accountNotify, account.summary AS accountSummary, account.leave_on_server AS accountLeaveOnServer, account.leave_deleted AS accountLeaveDeleted, account.auto_seen AS accountAutoSeen" +
             ", folder.name AS folderName, folder.color AS folderColor, folder.display AS folderDisplay, folder.type AS folderType, NULL AS folderInheritedType, folder.unified AS folderUnified, folder.read_only AS folderReadOnly" +
@@ -571,9 +640,11 @@ public interface DaoMessage {
             " WHERE message.id = :id";
 
     @Query(FETCH_MESSAGE)
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     LiveData<TupleMessageEx> liveMessage(long id);
 
     @Query(FETCH_MESSAGE)
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     TupleMessageEx getMessageEx(long id);
 
     String FETCH_KEYWORDS = "SELECT message.keywords AS selected, folder.keywords AS available" +
@@ -589,6 +660,7 @@ public interface DaoMessage {
 
     @Transaction
     @Query("SELECT message.*" +
+            ", " + GmailLabelFolder.SQL_LABEL_DISPLAY_DATA + " AS gmailLabelDisplayData" +
             ", account.pop AS accountProtocol, account.name AS accountName, account.category AS accountCategory, COALESCE(identity.color, folder.color, account.color) AS accountColor" +
             ", account.notify AS accountNotify, account.summary AS accountSummary, account.leave_on_server AS accountLeaveOnServer, account.leave_deleted AS accountLeaveDeleted, account.auto_seen AS accountAutoSeen" +
             ", folder.name AS folderName, folder.color AS folderColor, folder.display AS folderDisplay, folder.type AS folderType, NULL AS folderInheritedType, folder.unified AS folderUnified, folder.read_only AS folderReadOnly" +
@@ -611,14 +683,17 @@ public interface DaoMessage {
             " JOIN folder_view AS folder ON folder.id = message.folder" +
             " WHERE account.`synchronize`" +
             " AND folder.notify" +
+            " AND " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER +
             " AND (account.created IS NULL" +
             "  OR message.received > account.created" +
             "  OR message.sent > account.created" +
             "  OR message.ui_unsnoozed)" +
-            " AND (uid IS NOT NULL OR account.pop <> " + EntityAccount.TYPE_IMAP + ")" +
+            " AND (uid IS NOT NULL OR account.pop <> " + EntityAccount.TYPE_IMAP +
+            " OR message.gmail_id IS NOT NULL OR message.zoho_id IS NOT NULL OR message.graph_id IS NOT NULL)" +
             " AND message.notifying <> " + EntityMessage.NOTIFYING_IGNORE +
             " AND (message.notifying <> 0 OR NOT (message.ui_seen OR message.ui_ignored OR message.ui_hide))" +
             " ORDER BY message.received DESC")
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     LiveData<List<TupleMessageEx>> liveUnseenNotify();
 
     @Transaction
@@ -631,6 +706,7 @@ public interface DaoMessage {
             " WHERE (:account IS NULL OR account.id = :account)" +
             " AND account.`synchronize`" +
             " AND folder.notify" +
+            " AND " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER +
             " AND message.notifying <> " + EntityMessage.NOTIFYING_IGNORE +
             " AND NOT (message.ui_seen OR message.ui_hide)" +
             " GROUP BY folder.id" +
@@ -647,6 +723,7 @@ public interface DaoMessage {
             " AND account.`synchronize`" +
             " AND (:folder IS NULL OR folder.id = :folder)" +
             " AND folder.notify" +
+            " AND " + GmailLabelFolder.SQL_MESSAGE_IN_FOLDER +
             " AND message.notifying <> " + EntityMessage.NOTIFYING_IGNORE +
             " AND NOT (message.ui_seen OR message.ui_hide)")
     TupleMessageStats getWidgetUnseen(Long account, Long folder);
@@ -720,6 +797,10 @@ public interface DaoMessage {
             " WHERE (:folder IS NULL OR folder = :folder)" +
             " AND NOT ui_snoozed IS NULL")
     List<EntityMessage> getSnoozed(Long folder);
+
+    @Query("SELECT * FROM message" +
+            " WHERE folder = :folder AND zoho_id IS NOT NULL")
+    List<EntityMessage> getZohoMessages(long folder);
 
     @Query("SELECT COUNT(*) FROM message" +
             " WHERE NOT ui_snoozed IS NULL" +
@@ -834,6 +915,9 @@ public interface DaoMessage {
 
     @Query("UPDATE message SET labels = :labels WHERE id = :id AND NOT (labels IS :labels)")
     int setMessageLabels(long id, String labels);
+
+    @Query("UPDATE message SET folder = :folder WHERE id = :id AND NOT (folder IS :folder)")
+    int setMessageFolder(long id, long folder);
 
     @Query("UPDATE message SET ui_seen = :ui_seen WHERE id = :id AND NOT (ui_seen IS :ui_seen)")
     int setMessageUiSeen(long id, boolean ui_seen);
@@ -1100,6 +1184,16 @@ public interface DaoMessage {
             " AND ui_snoozed IS NULL")
     int deleteMessagesBefore(long folder, long sync_time, long keep_time, long keep_unread_time);
 
+    @Query("DELETE FROM message" +
+            " WHERE folder = :folder" +
+            " AND graph_id IS NOT NULL" +
+            " AND received < :keep_time" +
+            " AND (ui_seen OR received < :keep_unread_time)" +
+            " AND NOT ui_flagged" +
+            " AND stored < :sync_time" + // moved, browsed
+            " AND ui_snoozed IS NULL")
+    int deleteGraphMessagesBefore(long folder, long sync_time, long keep_time, long keep_unread_time);
+
     @Transaction
     @Query("DELETE FROM message" +
             " WHERE folder = :folder" +
@@ -1114,6 +1208,7 @@ public interface DaoMessage {
     @Transaction
     @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query("SELECT message.*" +
+            ", " + GmailLabelFolder.SQL_LABEL_DISPLAY_DATA + " AS gmailLabelDisplayData" +
             ", account.pop AS accountProtocol, account.name AS accountName, account.category AS accountCategory, COALESCE(identity.color, folder.color, account.color) AS accountColor" +
             ", account.notify AS accountNotify, account.summary AS accountSummary, account.leave_on_server AS accountLeaveOnServer, account.leave_deleted AS accountLeaveDeleted, account.auto_seen AS accountAutoSeen" +
             ", folder.name AS folderName, folder.color AS folderColor, folder.display AS folderDisplay, folder.type AS folderType, NULL AS folderInheritedType, folder.unified AS folderUnified, folder.read_only AS folderReadOnly" +
@@ -1121,6 +1216,7 @@ public interface DaoMessage {
             ", '[' || substr(group_concat(message.`from`, ','), 0, 2048) || ']' AS senders" +
             ", '[' || substr(group_concat(message.`to`, ','), 0, 2048) || ']' AS recipients" +
             ", COUNT(message.id) AS count" +
+            ", MAX(CASE WHEN message.gmail_id IS NOT NULL AND message.ui_busy IS NOT NULL THEN 1 ELSE 0 END) AS gmail_action_pending" +
             ", SUM(1 - message.ui_seen) AS unseen" +
             ", SUM(1 - message.ui_flagged) AS unflagged" +
             ", SUM(folder.type = '" + EntityFolder.DRAFTS + "') AS drafts" +
@@ -1147,6 +1243,7 @@ public interface DaoMessage {
             " LEFT JOIN identity_view AS identity ON identity.id = message.identity" +
             " JOIN folder_view AS folder ON folder.id = message.folder" +
             " WHERE account.`synchronize`" +
+            " AND (folder.gmail_label_id IS NULL OR message.gmail_id IS NULL OR " + GmailLabelFolder.SQL_MATCH_MESSAGE_FOLDER + ")" +
             " AND (:category IS NULL OR account.category = :category)" +
             " AND (:threading OR (:type IS NULL AND (folder.unified OR :found)) OR (:type IS NOT NULL AND folder.type = :type))" +
             " AND (NOT message.ui_hide OR :debug)" +
@@ -1197,6 +1294,7 @@ public interface DaoMessage {
     @Transaction
     @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query("SELECT message.*" +
+            ", " + GmailLabelFolder.SQL_LABEL_DISPLAY_DATA + " AS gmailLabelDisplayData" +
             ", account.pop AS accountProtocol, account.name AS accountName, account.category AS accountCategory, COALESCE(identity.color, folder.color, account.color) AS accountColor" +
             ", account.notify AS accountNotify, account.summary AS accountSummary, account.leave_on_server AS accountLeaveOnServer, account.leave_deleted AS accountLeaveDeleted, account.auto_seen AS accountAutoSeen" +
             ", folder.name AS folderName, folder.color AS folderColor, folder.display AS folderDisplay, folder.type AS folderType, f.inherited_type AS folderInheritedType, folder.unified AS folderUnified, folder.read_only AS folderReadOnly" +
@@ -1204,6 +1302,7 @@ public interface DaoMessage {
             ", '[' || substr(group_concat(message.`from`, ','), 0, 2048) || ']' AS senders" +
             ", '[' || substr(group_concat(message.`to`, ','), 0, 2048) || ']' AS recipients" +
             ", COUNT(message.id) AS count" +
+            ", MAX(CASE WHEN message.gmail_id IS NOT NULL AND message.ui_busy IS NOT NULL THEN 1 ELSE 0 END) AS gmail_action_pending" +
             ", SUM(1 - message.ui_seen) AS unseen" +
             ", SUM(1 - message.ui_flagged) AS unflagged" +
             ", SUM(folder.type = '" + EntityFolder.DRAFTS + "') AS drafts" +

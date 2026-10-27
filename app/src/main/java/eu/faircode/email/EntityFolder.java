@@ -27,6 +27,7 @@ import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 import androidx.preference.PreferenceManager;
+import androidx.room.ColumnInfo;
 import androidx.room.Entity;
 import androidx.room.ForeignKey;
 import androidx.room.Index;
@@ -59,6 +60,9 @@ import java.util.regex.Pattern;
         indices = {
                 @Index(value = {"account", "name"}, unique = true),
                 @Index(value = {"account"}),
+                @Index(value = {"account", "gmail_label_id"}),
+                @Index(value = {"account", "zoho_folder_id"}),
+                @Index(value = {"account", "graph_folder_id"}),
                 @Index(value = {"name"}),
                 @Index(value = {"type"}),
                 @Index(value = {"unified"})
@@ -75,6 +79,20 @@ public class EntityFolder extends EntityOrder implements Serializable {
     public Long uidv; // UIDValidity
     public Long modseq;
     public String namespace;
+    public String gmail_label_id;
+    // Opaque Gmail messages.list cursor for user-requested older-message pages.
+    public String gmail_page_token;
+    public String zoho_folder_id;
+    @NonNull
+    @ColumnInfo(defaultValue = "1")
+    public Integer zoho_page_start = 1;
+    // Separate bounded recent-message scan state; never shared with older-page pagination.
+    public Integer zoho_recent_page_start;
+    public String zoho_recent_scan_head_id;
+    public String zoho_recent_boundary_id;
+    public String graph_folder_id;
+    public String graph_page_link;
+    public String graph_delta_link;
     public Character separator;
     @NonNull
     public String name;
@@ -164,6 +182,9 @@ public class EntityFolder extends EntityOrder implements Serializable {
     static final String SENT = "Sent";
     static final String SYSTEM = "System";
     static final String USER = "User";
+    static final String GMAIL_API_ALL_MAIL_VIEW_ID = "__GMAIL_API_ARCHIVE_VIEW__";
+    // Stable legacy storage token; the virtual folder now represents All Mail, not Archive.
+    static final String GMAIL_API_ARCHIVE_VIEW_ID = GMAIL_API_ALL_MAIL_VIEW_ID;
 
     static final String FLAGGED = "flagged";
 
@@ -294,7 +315,7 @@ public class EntityFolder extends EntityOrder implements Serializable {
 
     void setProperties() {
         int sync = EntityFolder.SYSTEM_FOLDER_SYNC.indexOf(type);
-        this.synchronize = (sync >= 0);
+        this.synchronize = shouldSynchronize(type);
         this.poll = (sync < 0 || EntityFolder.SYSTEM_FOLDER_POLL.get(sync));
         this.download = (sync < 0 || EntityFolder.SYSTEM_FOLDER_DOWNLOAD.get(sync));
 
@@ -356,6 +377,10 @@ public class EntityFolder extends EntityOrder implements Serializable {
     static boolean shouldPoll(String type) {
         int sync = EntityFolder.SYSTEM_FOLDER_SYNC.indexOf(type);
         return (sync < 0 || EntityFolder.SYSTEM_FOLDER_POLL.get(sync));
+    }
+
+    static boolean shouldSynchronize(String type) {
+        return EntityFolder.SYSTEM_FOLDER_SYNC.contains(type);
     }
 
     static List<EntityFolder> getPopFolders(Context context) {
@@ -679,6 +704,7 @@ public class EntityFolder extends EntityOrder implements Serializable {
                     Objects.equals(this.parent, other.parent) &&
                     Objects.equals(this.uidv, other.uidv) &&
                     Objects.equals(this.namespace, other.namespace) &&
+                    Objects.equals(this.gmail_label_id, other.gmail_label_id) &&
                     Objects.equals(this.separator, other.separator) &&
                     this.name.equals(other.name) &&
                     this.type.equals(other.type) &&
@@ -729,6 +755,8 @@ public class EntityFolder extends EntityOrder implements Serializable {
         json.put("id", id);
         json.put("order", order);
         json.put("namespace", namespace);
+        if (gmail_label_id != null)
+            json.put("gmail_label_id", gmail_label_id);
         if (separator != null)
             json.put("separator", (int) separator);
         json.put("name", name);
@@ -764,6 +792,8 @@ public class EntityFolder extends EntityOrder implements Serializable {
 
         if (json.has("namespace"))
             folder.namespace = json.getString("namespace");
+        if (json.has("gmail_label_id") && !json.isNull("gmail_label_id"))
+            folder.gmail_label_id = json.getString("gmail_label_id");
         if (json.has("separator"))
             folder.separator = (char) json.getInt("separator");
 

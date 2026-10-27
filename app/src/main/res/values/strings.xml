@@ -234,7 +234,16 @@
     <string name="title_setup_account_identity_hint">You can configure a name, color, and swipe actions in the account settings, and configure a signature and default CC or BCC addresses in the identity settings.</string>
     <string name="title_setup_accounts">Accounts</string>
     <string name="title_setup_identities">Identities</string>
-    <string name="title_setup_gmail" translatable="false">Gmail</string>
+    <string name="title_setup_api" translatable="false">API</string>
+    <string name="title_setup_gmail" translatable="false">Gmail API</string>
+    <string name="title_setup_zoho_api" translatable="false">Zoho Mail API</string>
+    <string name="title_setup_graph_api" translatable="false">Microsoft Graph API</string>
+    <string name="title_setup_graph_api_rationale" translatable="false">Authorize access to your Microsoft account</string>
+    <string name="title_setup_zoho_api_rationale" translatable="false">Authorize access to your Zoho account</string>
+    <string name="title_setup_graph_reauthorize" translatable="false">Reauthorize Microsoft Graph</string>
+    <string name="title_setup_zoho_client_id" translatable="false">Zoho Client ID</string>
+    <string name="title_setup_zoho_client_secret" translatable="false">Zoho Client Secret</string>
+    <string name="title_setup_zoho_redirect_uri" translatable="false">Zoho Redirect URI</string>
     <string name="title_setup_oauth" translatable="false">%1$s (OAuth)</string>
     <string name="title_setup_android" translatable="false">%1$s (Android)</string>
     <string name="title_setup_google_sign_in">Sign in with Google</string>
@@ -243,9 +252,13 @@
     <string name="title_setup_imap">IMAP account</string>
     <string name="title_setup_pop3">POP3 account</string>
     <string name="title_setup_oauth_permission">The email provider has approved OAuth only for the Play Store and GitHub version</string>
-    <string name="title_setup_gmail_support">Authorizing Google accounts will work in the Play Store and GitHub version only because Android checks the digital app signature</string>
-    <string name="title_setup_gmail_rationale">Please grant permissions to select an account and read your name</string>
-    <string name="title_setup_gmail_permissions">Google will ask for permissions to read (to show messages to you), compose (to save draft messages), send and permanently delete all your email. FairEmail will never delete your messages without your explicit consent. Only you and no one else has access to your messages.</string>
+    <string name="title_setup_gmail_support">Gmail API authorization is available in the Play Store and GitHub versions; Android verifies the app signature.</string>
+    <string name="title_setup_gmail_rationale">Authorize Gmail API access with Google</string>
+    <string name="title_setup_gmail_api_rationale" translatable="false">Authorize access to your Gmail account</string>
+    <string name="title_setup_gmail_permissions">Google will ask for access to read and modify Gmail messages and permission to send messages. FairEmail does not request the broader permission for immediate permanent deletion.</string>
+    <string name="title_setup_gmail_authorize">Authorize with Google</string>
+    <string name="title_setup_gmail_reauthorize">Re-authorize Gmail</string>
+    <string name="title_setup_gmail_api_only">Gmail accounts must use the Gmail API authorization option; IMAP, POP, SMTP, and Gmail AppAuth setup are disabled.</string>
     <string name="title_setup_gmail_login">If Chrome is signed in to an account, a new account can only be added through Android. This can be avoided by logging out of Chrome via the Chrome sync settings.</string>
     <string name="title_setup_gmail_max">In case of the error message \"You\'re signed in to the maximum number of accounts\", you need to log out the browser from all Google accounts.</string>
     <string name="title_setup_outlook_hint">In the case of an alias address, the Office 365 wizard should probably be used.</string>
@@ -1301,6 +1314,13 @@
     <string name="title_account_right">Swipe right</string>
     <string name="title_account_move">Default move to</string>
     <string name="title_account_gmail">For reliable synchronization of a Gmail account, the Gmail quick setup wizard should be used whenever possible</string>
+    <string name="title_account_gmail_api" translatable="false">Gmail API</string>
+    <string name="title_account_zoho_api" translatable="false">Zoho Mail API</string>
+    <string name="title_account_graph_api" translatable="false">Microsoft Graph API</string>
+    <string name="title_account_gmail_api_legacy">This legacy Gmail setup needs Gmail API reauthorization. IMAP, POP, and SMTP server setup is disabled.</string>
+    <string name="title_setup_zoho_reauthorize" translatable="false">Reauthorize Zoho Mail</string>
+    <string name="title_account_address">Account address</string>
+    <string name="title_account_reauthorize">Reauthorize account</string>
     <string name="title_domain">Domain name</string>
     <string name="title_autoconfig">Get settings</string>
     <string name="title_imap" translatable="false">IMAP</string>
@@ -1364,6 +1384,9 @@
     <string name="title_unmetered_only">Connect only via unmetered networks</string>
     <string name="title_ignore_schedule">Synchronize outside the schedule too</string>
     <string name="title_related_identity">Add related identity (SMTP server)</string>
+    <string name="title_related_identity_api">Add associated identity</string>
+    <string name="title_edit_related_identity">Edit associated identity</string>
+    <string name="title_select_related_identity">Select identity to edit</string>
     <string name="title_check">Check</string>
     <string name="title_trust">Trust server certificate with fingerprint %1$s</string>
     <string name="title_no_name">Name missing</string>
@@ -1540,6 +1563,7 @@
     <string name="title_folder_inbox">Inbox</string>
     <string name="title_folder_outbox">Outbox</string>
     <string name="title_folder_all">Archive</string>
+    <string name="title_folder_gmail_all_mail">All Mail</string>
     <string name="title_folder_drafts">Drafts</string>
     <string name="title_folder_trash">Trash</string>
     <string name="title_folder_junk">Spam</string>
@@ -1728,7 +1752,9 @@
     <string name="title_attachments_incomplete">Some attachments or images were not downloaded and could not be added</string>
     <string name="title_report_remark">This report, a specially formatted email, was sent by an email server because a sent message could not be delivered to the recipient, for example because the mailbox is full, or because the email address does not exist (anymore).</string>
     <string name="title_ask_save">Save changes?</string>
+    <string name="title_ask_trash">Move message to Trash?</string>
     <string name="title_ask_delete">Delete message permanently?</string>
+    <string name="title_zoho_delete_refresh">The message or folder mapping is out of date. Refresh the folder and try deleting again.</string>
     <string name="title_ask_delete_accept">I understand that permanently deleting messages is irreversible</string>
     <string name="title_ask_delete_answer">Delete reply template permanently?</string>
     <string name="title_ask_delete_rule">Delete rule permanently?</string>
@@ -1934,12 +1960,14 @@
     <string name="title_dsn_reminder">Hard bounces damage the email reputation of the original sender!</string>
     <string name="title_size_reminder">Message (%1$s) larger than server limit (%2$s)</string>
     <string name="title_attachments_missing">Not all attachments have been downloaded</string>
+    <string name="title_zoho_zero_byte_attachment">Zoho Mail does not accept zero-byte attachments. Remove the empty attachment or choose a non-empty file, then try sending again.</string>
     <string name="title_download_attachments">Download attachments</string>
     <string name="title_attachments_download">Attachments downloaded: %1$s</string>
     <string name="title_attachments_no_download">This will no longer be shown, nor will attachments be downloaded automatically</string>
     <string name="title_dialog_hint">This dialog can be enabled again via the three-dots menu in the top action bar</string>
     <string name="title_draft_deleted">Draft discarded</string>
     <string name="title_draft_saved">Draft saved</string>
+    <string name="title_draft_saved_local">Draft saved on this device only; native API drafts are not uploaded to the provider</string>
     <string name="title_ask_send_via">Send message to %1$s via %2$s?</string>
     <string name="title_queued">Sending message</string>
     <string name="title_queued_at">Message will be sent around %1$s</string>
@@ -3057,5 +3085,7 @@
     <string name="fingerprint" translatable="false">17BA15C1AF55D925F98B99CEA4375D4CDF4C174B</string>
     <string name="fingerprint_fdroid" translatable="false">77CD40058858DC3A38523E01C227A39AA019F88B</string>
     <string name="fingerprint_amazon" translatable="false">200D0AA43A8ADBC7BB8237023C1553F4753CA7D2</string>
+    <string name="title_gmail_invalid_destination" translatable="false">That is not a writable Gmail destination. Gmail manages Sent and Drafts automatically; choose Inbox, Trash, Spam, or a user label.</string>
+    <string name="title_gmail_action_refresh" translatable="false">The Gmail message changed or is no longer available. Refreshing the current server state.</string>
     <string name="public_key" translatable="false">MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtFbxEbzL8u5accPGgBw/XdyiSS5BBE6ZQ9ELpKyJ/OQN+kdYniCAOw3lsQ/GuJScy4Y2HobqbBgLL8GLHG+Yu2EHC9dLjA3v2Mc25vvnfn86BsrpQvz1poN2n+roTBdq09FWbtebJ8m0hDBVmtfRi7RhTKIL4No3kodLhksdnucKjcFheubebWKgpmvbmw7NwuELhaZmyhw8WTtnQ4rZPMhjY1JJZgzwNExXgD7zzg4pJPkuQlfkuRkkvBpHpi3C7VDnYjrBlLHngI4wv3wxQBVwJqlvAT9PmX8dOVnTsWWdJdLQBZVWphuqVY54kjBIovN+o8w03WjsV9QiOQq+XwIDAQAB</string>
 </resources>

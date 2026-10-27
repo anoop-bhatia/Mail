@@ -21,6 +21,7 @@ package eu.faircode.email;
 
 import static android.app.Activity.RESULT_OK;
 import static com.google.android.material.textfield.TextInputLayout.END_ICON_PASSWORD_TOGGLE;
+import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_GMAIL;
 import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_OAUTH;
 import static eu.faircode.email.ServiceAuthenticator.AUTH_TYPE_PASSWORD;
 
@@ -97,6 +98,7 @@ public class FragmentIdentity extends FragmentBase {
 
     private Button btnAdvanced;
     private Spinner spProvider;
+    private TextView tvGmailApi;
     private EditText etDomain;
     private Button btnAutoConfig;
     private ContentLoadingProgressBar pbAutoConfig;
@@ -161,6 +163,8 @@ public class FragmentIdentity extends FragmentBase {
     private long copy = -1;
     private long account = -1;
     private int auth = AUTH_TYPE_PASSWORD;
+    private boolean gmailApiIdentity = false;
+    private boolean nativeRestIdentity = false;
     private String provider = null;
     private String certificate = null;
     private String signature = null;
@@ -206,6 +210,7 @@ public class FragmentIdentity extends FragmentBase {
 
         btnAdvanced = view.findViewById(R.id.btnAdvanced);
         spProvider = view.findViewById(R.id.spProvider);
+        tvGmailApi = view.findViewById(R.id.tvGmailApi);
 
         etDomain = view.findViewById(R.id.etDomain);
         btnAutoConfig = view.findViewById(R.id.btnAutoConfig);
@@ -410,6 +415,8 @@ public class FragmentIdentity extends FragmentBase {
             public void onClick(View v) {
                 int visibility = (grpAdvanced.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
                 grpAdvanced.setVisibility(visibility);
+                if (gmailApiIdentity)
+                    showNativeRestApiProperties();
                 checkPassword(tilPassword.getEditText().getText().toString());
                 if (visibility == View.VISIBLE)
                     getMainHandler().post(new Runnable() {
@@ -651,18 +658,65 @@ public class FragmentIdentity extends FragmentBase {
         if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED))
             return;
 
-        auth = account.auth_type;
+        auth = (account.isGmailApi() ? AUTH_TYPE_GMAIL : account.auth_type);
         provider = account.provider;
         etEmail.setText(account.user);
         etUser.setText(account.user);
-        tilPassword.getEditText().setText(account.password);
+        tilPassword.getEditText().setText(NativeRestIdentityPolicy.getPasswordFieldValue(null, account));
         //tilPassword.setEndIconMode(Helper.isSecure(getContext()) ? END_ICON_PASSWORD_TOGGLE : END_ICON_NONE);
         certificate = account.certificate_alias;
         tvCertificate.setText(certificate == null ? getString(R.string.title_optional) : certificate);
         etRealm.setText(account.realm);
         cbTrust.setChecked(false);
 
+        gmailApiIdentity = account.isNativeRestApi();
+        nativeRestIdentity = AccountEditPolicy.isNativeRestApi(account);
+        if (gmailApiIdentity) {
+            if (account.isGmailApi()) {
+                etHost.setText("smtp.gmail.com");
+                etPort.setText("465");
+                rgEncryption.check(R.id.radio_ssl);
+            }
+            showNativeRestApiProperties();
+            showNativeRestIdentityProperties(false);
+        }
+
         setAuth(auth);
+    }
+
+    private void showNativeRestApiProperties() {
+        tvGmailApi.setText(auth == ServiceAuthenticator.AUTH_TYPE_GRAPH_API
+                ? R.string.title_account_graph_api
+                : auth == ServiceAuthenticator.AUTH_TYPE_ZOHO
+                ? R.string.title_account_zoho_api : R.string.title_account_gmail_api);
+        tvGmailApi.setVisibility(View.VISIBLE);
+        if (auth == ServiceAuthenticator.AUTH_TYPE_ZOHO || auth == ServiceAuthenticator.AUTH_TYPE_GRAPH_API)
+            tilPassword.setVisibility(View.GONE);
+        int[] unusedTransportViews = new int[]{
+                R.id.tvProvider, R.id.spProvider, R.id.tvDomain, R.id.tvDomainHint, R.id.etDomain,
+                R.id.btnAutoConfig, R.id.pbAutoConfig, R.id.cardServer, R.id.cbLoginBeforeSend,
+                R.id.tvLoginBeforeSendHint, R.id.btnCertificate, R.id.tvCertificate, R.id.tvRealm,
+                R.id.etRealm, R.id.cbUseIp, R.id.tvUseIpHint, R.id.tvEhlo, R.id.etEhlo, R.id.ibEhlo
+        };
+        for (int viewId : unusedTransportViews)
+            view.findViewById(viewId).setVisibility(View.GONE);
+    }
+
+    private void showNativeRestIdentityProperties(boolean editingExisting) {
+        if (!nativeRestIdentity)
+            return;
+
+        for (int viewId : NativeRestIdentityPolicy.getNativeRestTransportViewIds())
+            view.findViewById(viewId).setVisibility(View.GONE);
+        for (int viewId : NativeRestIdentityPolicy.getNativeRestSmtpAdvancedViewIds())
+            view.findViewById(viewId).setVisibility(View.GONE);
+
+        spAccount.setEnabled(false);
+        if (editingExisting) {
+            etEmail.setEnabled(false);
+            etEmail.setFocusable(false);
+            etEmail.setFocusableInTouchMode(false);
+        }
     }
 
     private void setAuth(int auth) {
@@ -930,9 +984,53 @@ public class FragmentIdentity extends FragmentBase {
 
                 boolean should = args.getBoolean("should");
 
-                int semi = host.indexOf(':');
-                if (semi > 0 && host.indexOf(':', semi + 1) < 0)
-                    host = host.substring(0, semi);
+                DB db = DB.getInstance(context);
+                EntityIdentity identity = db.identity().getIdentity(id);
+                EntityAccount linkedAccount = (account < 0 ? null : db.account().getAccount(account));
+                boolean nativeRestIdentity = NativeRestIdentityPolicy.isNativeRestIdentity(identity, linkedAccount);
+                email = NativeRestIdentityPolicy.getEmailForSave(identity, id > 0, email);
+
+                if (nativeRestIdentity) {
+                    if (identity != null) {
+                        account = identity.account;
+                        dnssec = identity.dnssec;
+                        host = identity.host;
+                        encryption = identity.encryption;
+                        insecure = identity.insecure;
+                        dane = identity.dane;
+                        port = Integer.toString(identity.port);
+                        auth = identity.auth_type;
+                        provider = identity.provider;
+                        user = identity.user;
+                        password = identity.password;
+                        login = identity.login;
+                        certificate = identity.certificate_alias;
+                        realm = identity.realm;
+                        fingerprint = identity.fingerprint;
+                        use_ip = identity.use_ip;
+                        ehlo = identity.ehlo;
+                    } else if (linkedAccount != null) {
+                        dnssec = linkedAccount.dnssec;
+                        host = linkedAccount.host;
+                        encryption = linkedAccount.encryption;
+                        insecure = linkedAccount.insecure;
+                        dane = linkedAccount.dane;
+                        port = String.valueOf(linkedAccount.port);
+                        auth = linkedAccount.auth_type;
+                        provider = linkedAccount.provider;
+                        user = linkedAccount.user;
+                        password = linkedAccount.password;
+                        certificate = linkedAccount.certificate_alias;
+                        realm = linkedAccount.realm;
+                        fingerprint = linkedAccount.fingerprint;
+                    }
+                }
+
+                if (!nativeRestIdentity) {
+                    int semi = host.indexOf(':');
+                    if (semi > 0 && host.indexOf(':', semi + 1) < 0)
+                        host = host.substring(0, semi);
+                }
 
                 //if (TextUtils.isEmpty(name) && !should)
                 //    throw new IllegalArgumentException(context.getString(R.string.title_no_name));
@@ -940,19 +1038,21 @@ public class FragmentIdentity extends FragmentBase {
                     throw new IllegalArgumentException(context.getString(R.string.title_no_email));
                 if (!Helper.EMAIL_ADDRESS.matcher(email).matches() && !should)
                     throw new IllegalArgumentException(context.getString(R.string.title_email_invalid, email));
-                if (TextUtils.isEmpty(host) && !should)
-                    throw new IllegalArgumentException(context.getString(R.string.title_no_host));
-                if (TextUtils.isEmpty(port))
-                    if (encryption == EmailService.ENCRYPTION_STARTTLS)
-                        port = "587";
-                    else if (encryption == EmailService.ENCRYPTION_NONE)
-                        port = "25";
-                    else
-                        port = "465";
-                if (TextUtils.isEmpty(user) && !insecure && !should)
-                    throw new IllegalArgumentException(context.getString(R.string.title_no_user));
-                if (synchronize && TextUtils.isEmpty(password) && !insecure && certificate == null && !should)
-                    throw new IllegalArgumentException(context.getString(R.string.title_no_password));
+                if (!nativeRestIdentity) {
+                    if (TextUtils.isEmpty(host) && !should)
+                        throw new IllegalArgumentException(context.getString(R.string.title_no_host));
+                    if (TextUtils.isEmpty(port))
+                        if (encryption == EmailService.ENCRYPTION_STARTTLS)
+                            port = "587";
+                        else if (encryption == EmailService.ENCRYPTION_NONE)
+                            port = "25";
+                        else
+                            port = "465";
+                    if (TextUtils.isEmpty(user) && !insecure && !should)
+                        throw new IllegalArgumentException(context.getString(R.string.title_no_user));
+                    if (synchronize && TextUtils.isEmpty(password) && !insecure && certificate == null && !should)
+                        throw new IllegalArgumentException(context.getString(R.string.title_no_password));
+                }
 
                 if (!TextUtils.isEmpty(replyto) && !MessageHelper.hasPlaceholder(replyto) && !should) {
                     try {
@@ -981,7 +1081,7 @@ public class FragmentIdentity extends FragmentBase {
                         throw new IllegalArgumentException(context.getString(R.string.title_email_invalid, bcc));
                     }
 
-                if (!TextUtils.isEmpty(envelope_from) && !should)
+                if (!nativeRestIdentity && !TextUtils.isEmpty(envelope_from) && !should)
                     try {
                         for (InternetAddress address : InternetAddress.parse(envelope_from))
                             address.validate();
@@ -1029,12 +1129,10 @@ public class FragmentIdentity extends FragmentBase {
 
                 Long user_max_size = (TextUtils.isEmpty(max_size) ? null : Integer.parseInt(max_size) * 1000 * 1000L);
 
-                DB db = DB.getInstance(context);
-                EntityIdentity identity = db.identity().getIdentity(id);
-
                 if (should) {
                     if (identity == null)
-                        return !TextUtils.isEmpty(host) && !TextUtils.isEmpty(user);
+                        return (nativeRestIdentity ||
+                                (!TextUtils.isEmpty(host) && !TextUtils.isEmpty(user)));
 
                     if (!Objects.equals(identity.name, name))
                         return true;
@@ -1048,36 +1146,38 @@ public class FragmentIdentity extends FragmentBase {
                         return true;
                     if (!Objects.equals(identity.signature, signature))
                         return true;
-                    if (!Objects.equals(identity.dnssec, dnssec))
-                        return true;
-                    if (!Objects.equals(identity.host, host))
-                        return true;
-                    if (!Objects.equals(identity.encryption, encryption))
-                        return true;
-                    if (!Objects.equals(identity.insecure, insecure))
-                        return true;
-                    if (!Objects.equals(identity.dane, dane))
-                        return true;
-                    if (!Objects.equals(identity.port, Integer.parseInt(port)))
-                        return true;
-                    if (identity.auth_type != auth)
-                        return true;
-                    if (!Objects.equals(identity.user, user))
-                        return true;
-                    if (!Objects.equals(identity.password, password))
-                        return true;
-                    if (!Objects.equals(identity.login, login))
-                        return true;
-                    if (!Objects.equals(identity.certificate_alias, certificate))
-                        return true;
-                    if (!Objects.equals(identity.realm, realm))
-                        return true;
-                    if (!Objects.equals(identity.fingerprint, fingerprint))
-                        return true;
-                    if (!Objects.equals(identity.use_ip, use_ip))
-                        return true;
-                    if (!Objects.equals(identity.ehlo, ehlo))
-                        return true;
+                    if (!nativeRestIdentity) {
+                        if (!Objects.equals(identity.dnssec, dnssec))
+                            return true;
+                        if (!Objects.equals(identity.host, host))
+                            return true;
+                        if (!Objects.equals(identity.encryption, encryption))
+                            return true;
+                        if (!Objects.equals(identity.insecure, insecure))
+                            return true;
+                        if (!Objects.equals(identity.dane, dane))
+                            return true;
+                        if (!Objects.equals(identity.port, Integer.parseInt(port)))
+                            return true;
+                        if (identity.auth_type != auth)
+                            return true;
+                        if (!Objects.equals(identity.user, user))
+                            return true;
+                        if (!Objects.equals(identity.password, password))
+                            return true;
+                        if (!Objects.equals(identity.login, login))
+                            return true;
+                        if (!Objects.equals(identity.certificate_alias, certificate))
+                            return true;
+                        if (!Objects.equals(identity.realm, realm))
+                            return true;
+                        if (!Objects.equals(identity.fingerprint, fingerprint))
+                            return true;
+                        if (!Objects.equals(identity.use_ip, use_ip))
+                            return true;
+                        if (!Objects.equals(identity.ehlo, ehlo))
+                            return true;
+                    }
                     if (!Objects.equals(identity.synchronize, synchronize))
                         return true;
                     if (!Objects.equals(identity.primary, (identity.synchronize && primary)))
@@ -1098,7 +1198,7 @@ public class FragmentIdentity extends FragmentBase {
                         return true;
                     if (!Objects.equals(identity.bcc, bcc))
                         return true;
-                    if (!Objects.equals(identity.envelopeFrom, envelope_from))
+                    if (!nativeRestIdentity && !Objects.equals(identity.envelopeFrom, envelope_from))
                         return true;
                     if (!Objects.equals(identity.internal, internal))
                         return true;
@@ -1126,7 +1226,11 @@ public class FragmentIdentity extends FragmentBase {
 
                 String identityRealm = (identity == null ? null : identity.realm);
 
-                boolean check = (synchronize && (identity == null ||
+                boolean gmailApi = (auth == AUTH_TYPE_GMAIL ||
+                        auth == ServiceAuthenticator.AUTH_TYPE_ZOHO ||
+                        auth == ServiceAuthenticator.AUTH_TYPE_GRAPH_API ||
+                        EntityAccount.isGmailHost(host));
+                boolean check = (!nativeRestIdentity && !gmailApi && synchronize && (identity == null ||
                         !identity.synchronize || identity.error != null ||
                         dnssec != identity.dnssec ||
                         !host.equals(identity.host) ||
@@ -1186,7 +1290,7 @@ public class FragmentIdentity extends FragmentBase {
                 try {
                     db.beginTransaction();
 
-                    if (identity != null && !identity.password.equals(password)) {
+                    if (!nativeRestIdentity && identity != null && !identity.password.equals(password)) {
                         int count = db.identity().setIdentityPassword(
                                 identity.account,
                                 identity.user, password, identity.auth_type,
@@ -1204,22 +1308,24 @@ public class FragmentIdentity extends FragmentBase {
                     identity.color = color;
                     identity.signature = signature;
 
-                    identity.dnssec = dnssec;
-                    identity.host = host;
-                    identity.encryption = encryption;
-                    identity.insecure = insecure;
-                    identity.dane = dane;
-                    identity.port = Integer.parseInt(port);
-                    identity.auth_type = auth;
-                    identity.user = user;
-                    identity.password = password;
-                    identity.login = login;
-                    identity.certificate_alias = certificate;
-                    identity.provider = provider;
-                    identity.realm = realm;
-                    identity.fingerprint = fingerprint;
-                    identity.use_ip = use_ip;
-                    identity.ehlo = ehlo;
+                    if (!nativeRestIdentity || !update) {
+                        identity.dnssec = dnssec;
+                        identity.host = host;
+                        identity.encryption = encryption;
+                        identity.insecure = insecure;
+                        identity.dane = dane;
+                        identity.port = Integer.parseInt(port);
+                        identity.auth_type = auth;
+                        identity.user = user;
+                        identity.password = password;
+                        identity.login = login;
+                        identity.certificate_alias = certificate;
+                        identity.provider = provider;
+                        identity.realm = realm;
+                        identity.fingerprint = fingerprint;
+                        identity.use_ip = use_ip;
+                        identity.ehlo = ehlo;
+                    }
                     identity.synchronize = synchronize;
                     identity.primary = (identity.synchronize && primary);
                     identity.self = self;
@@ -1245,7 +1351,9 @@ public class FragmentIdentity extends FragmentBase {
                     identity.sign_key_alias = null;
                     identity.error = null;
                     identity.last_connected = last_connected;
-                    identity.max_size = (user_max_size == null ? server_max_size : user_max_size);
+                    identity.max_size = (user_max_size == null
+                            ? (gmailApi && identity.max_size != null ? identity.max_size : server_max_size)
+                            : user_max_size);
 
                     if (identity.primary)
                         db.identity().resetPrimary(account);
@@ -1374,6 +1482,7 @@ public class FragmentIdentity extends FragmentBase {
 
             @Override
             protected void onExecuted(Bundle args, final EntityIdentity identity) {
+                nativeRestIdentity = (identity != null && identity.isNativeRestApi());
                 if (savedInstanceState == null) {
                     etName.setText(identity == null ? null : identity.name);
                     etEmail.setText(identity == null ? null : identity.email);
@@ -1400,7 +1509,8 @@ public class FragmentIdentity extends FragmentBase {
                     cbDane.setEnabled(!cbInsecure.isChecked());
                     etPort.setText(identity == null ? null : Long.toString(identity.port));
                     etUser.setText(identity == null ? null : identity.user);
-                    tilPassword.getEditText().setText(identity == null ? null : identity.password);
+                    tilPassword.getEditText().setText(
+                            NativeRestIdentityPolicy.getPasswordFieldValue(identity, null));
                     cbLogin.setChecked((identity != null && identity.login));
                     certificate = (identity == null ? null : identity.certificate_alias);
                     tvCertificate.setText(certificate == null ? getString(R.string.title_optional) : certificate);
@@ -1441,7 +1551,10 @@ public class FragmentIdentity extends FragmentBase {
                     cbUnicode.setChecked(identity != null && identity.unicode);
                     cbOctetMime.setChecked(identity != null && identity.octetmime);
 
-                    auth = (identity == null ? AUTH_TYPE_PASSWORD : identity.auth_type);
+                    auth = (identity == null ? AUTH_TYPE_PASSWORD :
+                            (identity.isGmailApi() ? AUTH_TYPE_GMAIL : identity.auth_type));
+                    gmailApiIdentity = (identity != null &&
+                            (identity.isNativeRestApi() || EntityAccount.isGmailHost(identity.host)));
                     provider = (identity == null ? null : identity.provider);
 
                     if (identity == null || copy > 0)
@@ -1476,6 +1589,12 @@ public class FragmentIdentity extends FragmentBase {
 
                 Helper.setViewsEnabled(view, true);
                 setAuth(auth);
+                gmailApiIdentity = (gmailApiIdentity || auth == AUTH_TYPE_GMAIL ||
+                        EntityAccount.isGmailHost(etHost.getText().toString()));
+                if (gmailApiIdentity || nativeRestIdentity)
+                    showNativeRestApiProperties();
+                if (nativeRestIdentity)
+                    showNativeRestIdentityProperties(id > 0);
 
                 cbPrimary.setEnabled(cbSynchronize.isChecked());
                 cbSenderExtraName.setEnabled(cbSenderExtra.isChecked());
@@ -1502,7 +1621,7 @@ public class FragmentIdentity extends FragmentBase {
                     if (identity != null)
                         for (int pos = 1; pos < providers.size(); pos++) {
                             EmailProvider provider = providers.get(pos);
-                            if ((provider.oauth != null) == (identity.auth_type == AUTH_TYPE_OAUTH) &&
+                            if ((provider.oauth != null || provider.legacyOauth != null) == (identity.auth_type == AUTH_TYPE_OAUTH) &&
                                     provider.smtp.host.equals(identity.host) &&
                                     provider.smtp.port == identity.port &&
                                     provider.smtp.starttls == (identity.encryption == EmailService.ENCRYPTION_STARTTLS)) {
