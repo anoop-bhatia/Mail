@@ -16,7 +16,7 @@ plugins {
     alias(libs.plugins.download)
 }
 
-val appVersionCode = 2338
+val appVersionCode = 2339
 val appRevision = "a"
 val appReleaseName = "Elopteryx"
 

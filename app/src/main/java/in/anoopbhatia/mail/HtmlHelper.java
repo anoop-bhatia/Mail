@@ -1579,11 +1579,16 @@ public class HtmlHelper {
         }
     }
 
-    static void autoLink(Document document) {
-        autoLink(document, false);
+    static void autoLink(Document document, Context context) {
+        autoLink(document, false, context);
     }
 
-    static void autoLink(Document document, boolean outbound) {
+    static void autoLink(Document document, boolean outbound, Context context) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        boolean autolink = prefs.getBoolean("auto_link_rx", true);
+        if (!outbound && !autolink)
+            return;
+
         // https://en.wikipedia.org/wiki/List_of_URI_schemes
         // https://en.wikipedia.org/wiki/Geo_URI_scheme
         // https://developers.google.com/maps/documentation/urls/android-intents
@@ -1675,10 +1680,13 @@ public class HtmlHelper {
                                 }
 
                                 boolean email = group.contains("@") && !group.contains(":");
+                                boolean blacklist = group.toLowerCase().endsWith(".zip") &&
+                                        !(group.toLowerCase().startsWith("https://") ||
+                                                group.toLowerCase().startsWith("http://"));
                                 Log.i("Web url=" + group + " " + start + "..." + end + "/" + text.length() +
-                                        " linked=" + linked + " email=" + email + " count=" + links);
+                                        " linked=" + linked + " email=" + email + " blacklist=" + blacklist + " count=" + links);
 
-                                if (linked)
+                                if (blacklist || linked)
                                     span.appendText(text.substring(pos, end));
                                 else {
                                     span.appendText(text.substring(pos, start));

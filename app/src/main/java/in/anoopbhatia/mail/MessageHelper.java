@@ -1090,7 +1090,7 @@ public class MessageHelper {
             if (identity != null && send) {
                 if (auto_link) {
                     HtmlHelper.guessSchemes(document);
-                    HtmlHelper.autoLink(document, true);
+                    HtmlHelper.autoLink(document, true, context);
                 }
 
                 if (compose_color != Color.TRANSPARENT ||

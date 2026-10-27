@@ -149,6 +149,7 @@ public class FragmentRule extends FragmentBase {
     private CheckBox cbScheduleEnd;
     private CheckBox cbSnoozeSeen;
 
+    private CheckBox cbUnflag;
     private ViewButtonColor btnColor;
 
     private Spinner spImportance;
@@ -385,6 +386,7 @@ public class FragmentRule extends FragmentBase {
         cbScheduleEnd = view.findViewById(R.id.cbScheduleEnd);
         cbSnoozeSeen = view.findViewById(R.id.cbSnoozeSeen);
 
+        cbUnflag = view.findViewById(R.id.cbUnflag);
         btnColor = view.findViewById(R.id.btnColor);
 
         spImportance = view.findViewById(R.id.spImportance);
@@ -806,6 +808,13 @@ public class FragmentRule extends FragmentBase {
 
         npDuration.setMinValue(0);
         npDuration.setMaxValue(999);
+
+        cbUnflag.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(@NonNull CompoundButton buttonView, boolean isChecked) {
+                btnColor.setEnabled(!isChecked);
+            }
+        });
 
         btnColor.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -1482,9 +1491,12 @@ public class FragmentRule extends FragmentBase {
                                     break;
 
                                 case EntityRule.TYPE_FLAG:
+                                    boolean unflag = jaction.optBoolean("unflag", false);
+                                    cbUnflag.setChecked(unflag);
                                     btnColor.setColor(
                                             !jaction.has("color") || jaction.isNull("color")
                                                     ? null : jaction.getInt("color"));
+                                    btnColor.setEnabled(!unflag);
                                     break;
 
                                 case EntityRule.TYPE_IMPORTANCE:
@@ -1643,7 +1655,7 @@ public class FragmentRule extends FragmentBase {
         FragmentDialogAsk fragment = new FragmentDialogAsk();
         fragment.setArguments(args);
         fragment.setResultTarget(FragmentRule.this, REQUEST_DELETE);
-        fragment.show(getParentFragmentManager(), "answer:delete");
+        fragment.show(getParentFragmentManager(), "rule:delete");
     }
 
     private void onActionCheck() {
@@ -1943,6 +1955,7 @@ public class FragmentRule extends FragmentBase {
                     break;
 
                 case EntityRule.TYPE_FLAG:
+                    jaction.put("unflag", cbUnflag.isChecked());
                     int color = btnColor.getColor();
                     if (color != Color.TRANSPARENT)
                         jaction.put("color", color);
